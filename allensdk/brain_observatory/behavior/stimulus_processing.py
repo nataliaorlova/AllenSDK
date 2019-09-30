@@ -32,9 +32,13 @@ def get_stimulus_presentations(data, stimulus_timestamps):
     # workaround to rename columns to harmonize with visual coding and rebase timestamps to sync time
     stimulus_table.insert(loc=0, column='flash_number', value=np.arange(0, len(stimulus_table)))
     stimulus_table = stimulus_table.rename(columns={'frame': 'start_frame', 'time': 'start_time', 'flash_number':'stimulus_presentations_id'})
+
+    #workaround to make sure start_frames is integer, as it's written to pkl as float.
+    stimulus_table.start_frame = [int(start_frame) for start_frame in stimulus_table.start_frame]
+
     stimulus_table.start_time = [stimulus_timestamps[start_frame] for start_frame in stimulus_table.start_frame.values]
     end_time = []
-    for end_frame in stimulus_table.end_frame.values:
+    for end_frame in stimulus_table.end_frame:
         if not np.isnan(end_frame):
             end_time.append(stimulus_timestamps[int(end_frame)])
         else:
@@ -188,8 +192,8 @@ def get_visual_stimuli_df(data, time):
                 visual_stimuli_data.append({
                     "orientation": orientation,
                     "image_name": image_name,
-                    "frame": epoch_start,
-                    "end_frame": epoch_end,
+                    "frame": np.int(epoch_start),
+                    "end_frame": np.int(epoch_end),
                     "time": time[epoch_start],
                     "duration": time[epoch_end] - time[epoch_start],  # this will always work because an epoch will never occur near the end of time
                     "omitted": False,

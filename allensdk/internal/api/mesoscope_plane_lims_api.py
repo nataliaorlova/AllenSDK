@@ -95,10 +95,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
     @memoize
     def get_max_projection(self, image_api=None):
-
         if image_api is None:
             image_api = ImageApi
-
         maxInt_a13_file = self.get_max_projection_file()
         if (self.get_surface_2p_pixel_size_um() == 0) :
             pixel_size = 400/512
@@ -109,10 +107,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
     @memoize
     def get_average_projection(self, image_api=None):
-
         if image_api is None:
             image_api = ImageApi
-
         avgint_a1X_file = self.get_average_intensity_projection_image_file()
         if (self.get_surface_2p_pixel_size_um() == 0) :
             pixel_size = 400/512
@@ -122,10 +118,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
     @memoize
     def get_segmentation_mask_image(self, image_api=None):
-
         if image_api is None:
             image_api = ImageApi
-
         segmentation_mask_image_file = self.get_segmentation_mask_image_file()
         if (self.get_surface_2p_pixel_size_um() == 0) :
             pixel_size = 400/512
@@ -162,6 +156,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         df = pd.DataFrame(rewards_dict).set_index('timestamps', drop=True)
         return df
 
+
     @memoize
     def get_trials(self):
         licks = self.get_licks()
@@ -169,8 +164,9 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         data = pd.read_pickle(behavior_stimulus_file)
         rewards = self.get_rewards()
         stimulus_timestamps_no_monitor_delay = get_sync_data(self)['stimulus_times_no_delay'][:-1]
+        stimulus_presentations = self.get_stimulus_presentations()
         rebase_function = get_stimulus_rebase_function(data, stimulus_timestamps_no_monitor_delay)
-        trial_df = get_trials(data, licks, rewards, rebase_function)
+        trial_df = get_trials(data, licks, rewards, stimulus_presentations, rebase_function)
         return trial_df
 
 
