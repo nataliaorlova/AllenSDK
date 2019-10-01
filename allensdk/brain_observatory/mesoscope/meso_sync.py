@@ -10,12 +10,12 @@ def get_sync_data(self):
         line_labels = sync_dataset.line_labels
 
         wrong_labels = ['vsync_2p', 'stim_vsync', 'photodiode', 'acq_trigger', 'cam1', 'cam2',]
-        correct_labels = ['2p_vsync', '', 'stim_vsync', '', 'stim_photodiode', 'acq_trigger', '', '', 'cam1_exposure', 'cam2_exposure', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'lick_sensor']
+        default_labels = ['2p_vsync', '', 'stim_vsync', '', 'stim_photodiode', 'acq_trigger', '', '', 'cam1_exposure', 'cam2_exposure', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'lick_sensor']
 
-        if line_labels != correct_labels :
+        if line_labels != default_labels :
             if all([line_labels[i] == '' for i in range(len(line_labels))]) == True :
                 logger.warning('Line labels are empty, replacing with defaults')
-                line_labels = correct_labels
+                line_labels = default_labels
             else:
                 logger.warning('Some line labels are incorrect, renaming using defaults')
                 i = 0
@@ -23,7 +23,7 @@ def get_sync_data(self):
                     line = line_labels[i]
                     if line in wrong_labels :
                         line_labels.pop(i)
-                        line_labels.insert(i, correct_labels[i])
+                        line_labels.insert(i, default_labels[i])
                     i +=1
 
         sync_dataset.line_labels = line_labels
