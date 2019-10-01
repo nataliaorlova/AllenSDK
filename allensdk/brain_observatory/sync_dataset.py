@@ -85,10 +85,11 @@ class Dataset(object):
     ...     dset.stats()
 
     """
-
-
-    FRAME_KEYS = ('frames', 'stim_vsync', )
+    FRAME_KEYS = ('frames', 'stim_vsync')
     PHOTODIODE_KEYS = ('photodiode', 'stim_photodiode')
+    OPTOGENETIC_STIMULATION_KEYS = ("LED_sync", "opto_trial")
+    EYE_TRACKING_KEYS = ("cam2_exposure",  # clocks eye tracking frame pulses (port 0, line 9)
+                         "eyetracking")  # previous line label for eye tracking (prior to ~ Oct. 2018)
 
 
     def __init__(self, path):
@@ -306,13 +307,16 @@ class Dataset(object):
                 self.get_edges('falling', keys, units)
             ]))
 
+        if isinstance(keys, str):
+            keys = [keys]
+
         for key in keys:
             try:
-                return fn(key, units=units)
+                return fn(key, units)
             except ValueError:
                 continue
 
-        raise KeyError
+        raise KeyError(f"none of {keys} were found in this dataset's line labels")
 
     def get_falling_edges(self, line, units='samples'):
         """

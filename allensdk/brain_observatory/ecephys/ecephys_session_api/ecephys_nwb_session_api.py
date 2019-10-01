@@ -16,7 +16,12 @@ from allensdk.brain_observatory.ecephys import get_unit_filter_value
 
 class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
 
-    def __init__(self, path, probe_lfp_paths: Optional[Dict[int, FilePromise]] = None, **kwargs):
+    def __init__(self, 
+        path, 
+        probe_lfp_paths: Optional[Dict[int, FilePromise]] = None, 
+        additional_unit_metrics=None, 
+        **kwargs
+    ):
 
         self.filter_by_validity = kwargs.pop("filter_by_validity", True)
         self.amplitude_cutoff_maximum = get_unit_filter_value("amplitude_cutoff_maximum", **kwargs)
@@ -26,6 +31,7 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
         super(EcephysNwbSessionApi, self).__init__(path, **kwargs)
         self.probe_lfp_paths = probe_lfp_paths
 
+        self.additional_unit_metrics = additional_unit_metrics
 
     def get_session_start_time(self):
         return self.nwbfile.session_start_time
@@ -51,7 +57,8 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
                 'description': v.description, 
                 'location': v.location,
                 "sampling_rate": v.sampling_rate,
-                "lfp_sampling_rate": v.lfp_sampling_rate
+                "lfp_sampling_rate": v.lfp_sampling_rate,
+                "has_lfp_data": v.has_lfp_data
             })
         probes = pd.DataFrame(probes)
         probes = probes.set_index(keys='id', drop=True)
@@ -63,7 +70,8 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
 
         # these are stored as string in nwb 2, which is not ideal
         # float is also not ideal, but we have nans indicating out-of-brain structures
-        channels["manual_structure_id"] = [float(chid) if chid != "" else np.nan for chid in channels["manual_structure_id"]]
+        channels["structure_id"] = [float(chid) if chid != "" else np.nan for chid in channels["manual_structure_id"]]
+        channels.drop(columns="manual_structure_id")
         
         if self.filter_by_validity:
             channels = channels[channels["valid_data"]]
@@ -79,9 +87,20 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
         units_table = self._get_full_units_table()
         return units_table['spike_times'].to_dict()
 
+    def get_spike_amplitudes(self) -> Dict[int, np.ndarray]:
+        units_table = self._get_full_units_table()
+        return units_table["spike_amplitudes"].to_dict()
+
     def get_units(self) -> pd.DataFrame:
         units = self._get_full_units_table()
-        units.drop(columns=['spike_times', 'waveform_mean'], inplace=True)
+
+        to_drop = set(["spike_times", "spike_amplitudes", "waveform_mean"]) & set(units.columns)
+        units.drop(columns=list(to_drop), inplace=True)
+
+        if self.additional_unit_metrics is not None:
+            additional_metrics = self.additional_unit_metrics()
+            units = pd.merge(units, additional_metrics, left_index=True, right_index=True)
+
         return units
 
     def get_lfp(self, probe_id: int) -> xr.DataArray:
@@ -129,10 +148,86 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
             "supply_voltage": supply_voltage_series.data[:]
         })
 
+    def get_rig_metadata(self) -> Optional[dict]:
+        try:
+            et_mod = self.nwbfile.get_processing_module("eye_tracking")
+        except KeyError as e:
+            print(f"This ecephys session '{int(self.nwbfile.identifier)}' has no eye tracking data (and thus no rig geometry data). (NWB error: {e})")
+            return None
+
+        rig_metadata = {}
+        rig_metadata["rig_geometry_data"] = et_mod.get_data_interface("rig_geometry_data").to_dataframe()
+        rig_equipment = et_mod.get_data_interface("equipment").to_dataframe()
+        rig_metadata["rig_equipment"] = rig_equipment["equipment"][0]
+
+        return rig_metadata
+
+    def get_eye_tracking_data(self, suppress_eye_gaze_data: bool = True) -> Optional[pd.DataFrame]:
+        try:
+            et_mod = self.nwbfile.get_processing_module("eye_tracking")
+            rgm_mod = self.nwbfile.get_processing_module("raw_gaze_mapping")
+            fgm_mod = self.nwbfile.get_processing_module("filtered_gaze_mapping")
+        except KeyError as e:
+            print(f"This ecephys session '{int(self.nwbfile.identifier)}' has no eye tracking data. (NWB error: {e})")
+            return None
+
+        raw_eye_area_ts = rgm_mod.get_data_interface("eye_area")
+        raw_pupil_area_ts = rgm_mod.get_data_interface("pupil_area")
+        raw_screen_coordinates_ts = rgm_mod.get_data_interface("screen_coordinates")
+        raw_screen_coordinates_spherical_ts = rgm_mod.get_data_interface("screen_coordinates_spherical")
+
+        filtered_eye_area_ts = fgm_mod.get_data_interface("eye_area")
+        filtered_pupil_area_ts = fgm_mod.get_data_interface("pupil_area")
+        filtered_screen_coordinates_ts = fgm_mod.get_data_interface("screen_coordinates")
+        filtered_screen_coordinates_spherical_ts = fgm_mod.get_data_interface("screen_coordinates_spherical")
+
+        cr_ellipse_fits = et_mod.get_data_interface("cr_ellipse_fits").to_dataframe()
+        eye_ellipse_fits = et_mod.get_data_interface("eye_ellipse_fits").to_dataframe()
+        pupil_ellipse_fits = et_mod.get_data_interface("pupil_ellipse_fits").to_dataframe()
+
+        eye_tracking_data = {
+            "corneal_reflection_center_x": cr_ellipse_fits["center_x"].values,
+            "corneal_reflection_center_y": cr_ellipse_fits["center_y"].values,
+            "corneal_reflection_height": cr_ellipse_fits["height"].values,
+            "corneal_reflection_width": cr_ellipse_fits["width"].values,
+            "corneal_reflection_phi": cr_ellipse_fits["phi"].values,
+
+            "pupil_center_x": pupil_ellipse_fits["center_x"].values,
+            "pupil_center_y": pupil_ellipse_fits["center_y"].values,
+            "pupil_height": pupil_ellipse_fits["height"].values,
+            "pupil_width": pupil_ellipse_fits["width"].values,
+            "pupil_phi": pupil_ellipse_fits["phi"].values,
+
+            "eye_center_x": eye_ellipse_fits["center_x"].values,
+            "eye_center_y": eye_ellipse_fits["center_y"].values,
+            "eye_height": eye_ellipse_fits["height"].values,
+            "eye_width": eye_ellipse_fits["width"].values,
+            "eye_phi": eye_ellipse_fits["phi"].values
+        }
+
+        if not suppress_eye_gaze_data:
+            eye_tracking_data.update(
+                {
+                    "raw_eye_area": raw_eye_area_ts.data[:],
+                    "raw_pupil_area": raw_pupil_area_ts.data[:],
+                    "raw_screen_coordinates_x_cm": raw_screen_coordinates_ts.data[:, 1],
+                    "raw_screen_coordinates_y_cm": raw_screen_coordinates_ts.data[:, 0],
+                    "raw_screen_coordinates_spherical_x_deg": raw_screen_coordinates_spherical_ts.data[:, 1],
+                    "raw_screen_coordinates_spherical_y_deg": raw_screen_coordinates_spherical_ts.data[:, 0],
+
+                    "filtered_eye_area": filtered_eye_area_ts.data[:],
+                    "filtered_pupil_area": filtered_pupil_area_ts.data[:],
+                    "filtered_screen_coordinates_x_cm": filtered_screen_coordinates_ts.data[:, 1],
+                    "filtered_screen_coordinates_y_cm": filtered_screen_coordinates_ts.data[:, 0],
+                    "filtered_screen_coordinates_spherical_x_deg": filtered_screen_coordinates_spherical_ts.data[:, 1],
+                    "filtered_screen_coordinates_spherical_y_deg": filtered_screen_coordinates_spherical_ts.data[:, 0]
+                }
+            )
+
+        return pd.DataFrame(eye_tracking_data, index=raw_eye_area_ts.timestamps[:])
 
     def get_ecephys_session_id(self) -> int:
         return int(self.nwbfile.identifier)
-
 
     def get_current_source_density(self, probe_id):
         csd_mod = self._probe_nwbfile(probe_id).get_processing_module("current_source_density")
@@ -141,20 +236,22 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
         csd = xr.DataArray(
             name="CSD",
             data=csd_ts.data[:],
-            dims=["channel", "time"],
+            dims=["virtual_channel_index", "time"],
             coords={
-                # Each CSD calculation step reduces the channel dimension by 2. 
-                # These channels contributed to the calculation, 
-                # but are not specifically associated with a row in the result
-                "channel": csd_ts.control[2:-2], 
-                "time": csd_ts.timestamps[:]
+                "virtual_channel_index": np.arange(csd_ts.data.shape[0]),
+                "time": csd_ts.timestamps[:],
+                "vertical_position": (("virtual_channel_index",), csd_ts.control[:, 1]),
+                "horizontal_position": (("virtual_channel_index",), csd_ts.control[:, 0])
             }
         )
-
-        known_channels = set(self.get_channels().index.values)
-        known_csd_channels = [ch for ch in csd["channel"].values if ch in known_channels]
-        csd = csd.loc[{"channel": known_csd_channels}]
         return csd
+
+    def get_optogenetic_stimulation(self) -> pd.DataFrame:
+        mod = self.nwbfile.get_processing_module("optotagging")
+        table = mod.get_data_interface("optogenetic_stimuluation").to_dataframe()
+        table.drop(columns=["tags", "timeseries"], inplace=True)
+        return table
+
 
     def _get_full_units_table(self) -> pd.DataFrame:
         units = self.nwbfile.units.to_dataframe()
@@ -173,3 +270,6 @@ class EcephysNwbSessionApi(NwbApi, EcephysSessionApi):
         units = units[units["isi_violations"] <= self.isi_violations_maximum]
 
         return units
+
+    def get_metadata(self):
+        return self.nwbfile.lab_meta_data['metadata'].to_dict()

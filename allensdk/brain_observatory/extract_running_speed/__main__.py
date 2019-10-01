@@ -48,15 +48,8 @@ def angular_to_linear_velocity(angular_velocity, radius):
 
 
 def extract_running_speeds(
-    frame_times, dx_deg, vsig, vin, wheel_radius, subject_position
+    frame_times, dx_deg, vsig, vin, wheel_radius, subject_position, use_median_duration=False
 ):
-
-    # due to an acquisition bug (the buffer of raw orientations may be updated
-    # more slowly than it is read, leading to a 0 value for the change in
-    # orientation over an interval) there may be exact zeros in the velocity.
-    nonzero_indices = np.flatnonzero(dx_deg)
-    dx_deg = dx_deg[nonzero_indices]
-    frame_times = frame_times[nonzero_indices]
 
     # the first interval does not have a known start time, so we can't compute
     # an average velocity from dx
@@ -66,12 +59,15 @@ def extract_running_speeds(
     end_times = frame_times[1:]
 
     durations = end_times - start_times
-    angular_velocity = dx_rad / durations
+    if use_median_duration:
+        angular_velocity = dx_rad / durations
+    else:
+        angular_velocity = dx_rad = np.median(durations)
 
     radius = wheel_radius * subject_position
     linear_velocity = angular_to_linear_velocity(angular_velocity, radius)
 
-    return pd.DataFrame(
+    df = pd.DataFrame(
         {
             "start_time": start_times,
             "end_time": end_times,
@@ -80,10 +76,17 @@ def extract_running_speeds(
         }
     )
 
+    # due to an acquisition bug (the buffer of raw orientations may be updated
+    # more slowly than it is read, leading to a 0 value for the change in
+    # orientation over an interval) there may be exact zeros in the velocity.
+    df = df[~(np.isclose(df["net_rotation"], 0.0))]
+
+    return df
+
 
 def main(
     stimulus_pkl_path, sync_h5_path, output_path, wheel_radius, 
-    subject_position, **kwargs
+    subject_position, use_median_duration, **kwargs
 ):
 
     stim_file = pd.read_pickle(stimulus_pkl_path)
@@ -121,6 +124,7 @@ def main(
         vin=vin,
         wheel_radius=wheel_radius,
         subject_position=subject_position,
+        use_median_duration=use_median_duration
     )
 
     raw_data = pd.DataFrame(

@@ -13,7 +13,7 @@ class HttpEngine:
         response = requests.get(url, stream=True)
         response_mb = None
         if "Content-length" in response.headers:
-            response_mb = response.headers["Content-length"] / 1024 ** 2
+            response_mb = float(response.headers["Content-length"]) / 1024 ** 2
 
         # TODO: this should be async with write (response.raw.read_chunked?)
         for ii, chunk in enumerate(response):

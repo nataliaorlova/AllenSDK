@@ -92,6 +92,8 @@ class EcephysProjectLimsApi(EcephysProjectApi):
                 join ecephys_probes ep on ep.id = ec.ecephys_probe_id
                 join ecephys_sessions es on es.id = ep.ecephys_session_id 
                 where ec.valid_data
+                and ep.workflow_state != 'failed'
+                and es.workflow_state != 'failed'
                 {{pm.optional_equals('eu.quality', quality) -}}
                 {{pm.optional_contains('eu.id', unit_ids) -}}
                 {{pm.optional_contains('ec.id', channel_ids) -}}
@@ -114,7 +116,6 @@ class EcephysProjectLimsApi(EcephysProjectApi):
         )
 
         response.set_index("id", inplace=True)
-        response.rename(columns={"ecephys_channel_id": "peak_channel_id"}, inplace=True)
 
         return response
 
@@ -128,8 +129,8 @@ class EcephysProjectLimsApi(EcephysProjectApi):
                     ec.local_index,
                     ec.probe_vertical_position,
                     ec.probe_horizontal_position,
-                    ec.manual_structure_id,
-                    st.acronym as manual_structure_acronym,
+                    ec.manual_structure_id as structure_id,
+                    st.acronym as structure_acronym,
                     pc.unit_count
                 from ecephys_channels ec 
                 join ecephys_probes ep on ep.id = ec.ecephys_probe_id
@@ -149,6 +150,8 @@ class EcephysProjectLimsApi(EcephysProjectApi):
                     group by ech.id
                 ) pc on ec.id = pc.ecephys_channel_id
                 where valid_data
+                and ep.workflow_state != 'failed'
+                and es.workflow_state != 'failed'
                 {{pm.optional_contains('ec.id', channel_ids) -}}
                 {{pm.optional_contains('ep.id', probe_ids) -}}
                 {{pm.optional_contains('es.id', session_ids) -}}
@@ -234,6 +237,8 @@ class EcephysProjectLimsApi(EcephysProjectApi):
                     group by epr.id
                 ) str on ep.id = str.ecephys_probe_id
                 where true
+                and ep.workflow_state != 'failed'
+                and es.workflow_state != 'failed'
                 {{pm.optional_contains('ep.id', probe_ids) -}}
                 {{pm.optional_contains('es.id', session_ids) -}}
             """,
@@ -245,7 +250,9 @@ class EcephysProjectLimsApi(EcephysProjectApi):
             presence_ratio_minimum=get_unit_filter_value("presence_ratio_minimum", replace_none=False, **kwargs),
             isi_violations_maximum=get_unit_filter_value("isi_violations_maximum", replace_none=False, **kwargs)
         )
-        return response.set_index("id")
+        response = response.set_index("id")
+
+        return response
 
     def get_sessions(
         self,
@@ -356,6 +363,37 @@ class EcephysProjectLimsApi(EcephysProjectApi):
         response.set_index("id", inplace=True) 
         response["genotype"].fillna("wt", inplace=True)
         return response
+
+
+    def get_unit_analysis_metrics(self, unit_ids=None, ecephys_session_ids=None, session_types=None):
+        response = build_and_execute(
+            """
+            {%- import 'postgres_macros' as pm -%}
+            {%- import 'macros' as m -%}
+            select eumb.data, eumb.ecephys_unit_id from ecephys_unit_metric_bundles eumb
+            join ecephys_analysis_runs ear on eumb.ecephys_analysis_run_id = ear.id
+            join ecephys_units eu on eumb.ecephys_unit_id = eu.id
+            join ecephys_channels ec on eu.ecephys_channel_id = ec.id 
+            join ecephys_probes ep on ec.ecephys_probe_id = ep.id
+            join ecephys_sessions es on es.id = ep.ecephys_session_id
+            where ear.current
+            {{pm.optional_contains('eumb.id', unit_ids) -}}
+            {{pm.optional_contains('es.id', ecephys_session_ids) -}}
+            {{pm.optional_contains('es.stimulus_name', session_types, True) -}}
+        """,
+            base=postgres_macros(),
+            engine=self.postgres_engine.select,
+            unit_ids=unit_ids,
+            ecephys_session_ids=ecephys_session_ids,
+            session_types=session_types
+        )
+
+        data = pd.DataFrame(response.pop("data").values.tolist(), index=response.index)
+        response = pd.merge(response, data, left_index=True, right_index=True)
+        response.set_index("ecephys_unit_id", inplace=True)
+
+        return response
+
 
     @classmethod
     def default(cls, pg_kwargs=None, app_kwargs=None):
