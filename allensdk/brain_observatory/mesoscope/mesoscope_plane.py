@@ -32,4 +32,3 @@ class  MesoscopeOphysPlane(BehaviorOphysSession):
         self.segmentation_mask_image = LazyProperty(self.api.get_segmentation_mask_image)
         self.experiment_df = LazyProperty(self.api.get_experiment_df)
         self.ophys_session_id = LazyProperty(self.api.get_ophys_session_id)
-        self.stimulus_presentations = LazyProperty(self.api.get_stimulus_presentations)

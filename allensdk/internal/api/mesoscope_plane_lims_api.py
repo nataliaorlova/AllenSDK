@@ -2,7 +2,8 @@ from allensdk.internal.api.behavior_ophys_api import BehaviorOphysLimsApi
 from allensdk.brain_observatory.behavior.image_api import ImageApi
 from allensdk.brain_observatory.behavior.sync import get_stimulus_rebase_function
 from allensdk.brain_observatory.behavior.trials_processing import get_trials
-from allensdk.brain_observatory.mesoscope.meso_sync import get_sync_data
+#from allensdk.brain_observatory.mesoscope.meso_sync import get_sync_data
+from allensdk.brain_observatory.behavior.sync import get_sync_data
 import uuid
 import matplotlib.image as mpimg
 from allensdk.api.cache import memoize
@@ -127,46 +128,17 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         segmentation_mask_image = mpimg.imread(segmentation_mask_image_file)
         return image_api.serialize(segmentation_mask_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
 
-    def get_licks(self):
-        lick_times = get_sync_data(self)['lick_times']
+    def get_licks(self): # here we read licks from sync, if they are absent, we read from pickle.
+        sync_file = self.get_sync_file()
+        lick_times = get_sync_data(sync_file)['lick_times']
         licks_df = pd.DataFrame({'time': lick_times})
         if licks_df.empty :
             behavior_stimulus_file = self.get_behavior_stimulus_file()
             data = pd.read_pickle(behavior_stimulus_file)
             lick_frames = data['items']['behavior']['lick_sensors'][0]['lick_events']
-            stimulus_timestamps_no_monitor_delay = get_sync_data(self)['stimulus_times_no_delay'][:-1]
+            stimulus_timestamps_no_monitor_delay = get_sync_data(sync_file)['stimulus_times_no_delay']
             lick_times  = stimulus_timestamps_no_monitor_delay[lick_frames]
             licks_df = pd.DataFrame({'time': lick_times})
         return licks_df
-
-    @memoize
-    def get_rewards(self):
-        stimulus_timestamps_no_monitor_delay = get_sync_data(self)['stimulus_times_no_delay'][:-1]
-        behavior_stimulus_file = self.get_behavior_stimulus_file()
-        data = pd.read_pickle(behavior_stimulus_file)
-        rebase_function = get_stimulus_rebase_function(data, stimulus_timestamps_no_monitor_delay)
-        trial_df = pd.DataFrame(data["items"]["behavior"]['trial_log'])
-        rewards_dict = {'volume': [], 'timestamps': [], 'autorewarded': []}
-        for idx, trial in trial_df.iterrows():
-            rewards = trial["rewards"]  # as i write this there can only ever be one reward per trial
-            if rewards:
-                rewards_dict["volume"].append(rewards[0][0])
-                rewards_dict["timestamps"].append(rebase_function(rewards[0][1]))
-                rewards_dict["autorewarded"].append('auto_rewarded' in trial['trial_params'])
-        df = pd.DataFrame(rewards_dict).set_index('timestamps', drop=True)
-        return df
-
-
-    @memoize
-    def get_trials(self):
-        licks = self.get_licks()
-        behavior_stimulus_file = self.get_behavior_stimulus_file()
-        data = pd.read_pickle(behavior_stimulus_file)
-        rewards = self.get_rewards()
-        stimulus_timestamps_no_monitor_delay = get_sync_data(self)['stimulus_times_no_delay'][:-1]
-        stimulus_presentations = self.get_stimulus_presentations()
-        rebase_function = get_stimulus_rebase_function(data, stimulus_timestamps_no_monitor_delay)
-        trial_df = get_trials(data, licks, rewards, stimulus_presentations, rebase_function)
-        return trial_df
 
 
