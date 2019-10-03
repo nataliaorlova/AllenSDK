@@ -88,8 +88,13 @@ class Dataset(object):
     FRAME_KEYS = ('frames', 'stim_vsync')
     PHOTODIODE_KEYS = ('photodiode', 'stim_photodiode')
     OPTOGENETIC_STIMULATION_KEYS = ("LED_sync", "opto_trial")
-    EYE_TRACKING_KEYS = ("cam2_exposure",  # clocks eye tracking frame pulses (port 0, line 9)
-                         "eyetracking")  # previous line label for eye tracking (prior to ~ Oct. 2018)
+    EYE_TRACKING_CAM_KEYS = ("cam2_exposure",  # clocks eye tracking frame pulses (port 0, line 9)
+                         "eyetracking", # previous line label for eye tracking (prior to ~ Oct. 2018)
+                         "cam2")
+    TWO_PHOTON_VSYNC = ('2p_vsync', 'vsync_2p')
+    BEHAVIOR_CAM_KEYS = ('cam1', 'cam1_exposure', 'behavior_monitoring')
+    ACQUISITION_TRIGGER = ('acq_trigger', 'acq_on', '2p_trigger')
+    LICKS = ('lick_trigger', 'lick_sensor')
 
 
     def __init__(self, path):
