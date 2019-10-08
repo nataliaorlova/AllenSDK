@@ -9,7 +9,7 @@ from pymongo import MongoClient
 mongo = MongoClient('10.128.105.108', 27017)
 
 
-def get_all_mesoscope_sessions():
+def get_all_created_sessions():
 
     db = PostgresQueryMixin()
     query = ("select os.id as session_id, "
@@ -23,8 +23,8 @@ def get_all_mesoscope_sessions():
              "join specimens sp on sp.id = os.specimen_id "
              "join projects p on p.id = os.project_id "
              "join users on users.id = os.operator_id "
-             "join equipment rigs on rigs.id = os.equipment_id "
-             "where rigs.name in ('MESO.1', 'MESO.2')"
+#             "join equipment rigs on rigs.id = os.equipment_id "
+             "where p.code in ('MesoscopeDevelopment', 'VisualBehaviorMultiscope', 'VisualBehaviorMultiscope4areasx2d', 'VisualBehaviorMultiscopeTask1G')"
              "order by date")
 
     #let's for now read stim type from mouse_director
