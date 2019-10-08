@@ -24,7 +24,7 @@ def get_all_created_sessions():
              "join projects p on p.id = os.project_id "
              "join users on users.id = os.operator_id "
              "join equipment rigs on rigs.id = os.equipment_id "
-             "where rigs.name in ('MesoscopeDevelopment', 'VisualBehaviorMultiscope', 'VisualBehaviorMultiscope4areasx2d', 'VisualBehaviorMultiscopeTask1G')"
+             "where project in ('MesoscopeDevelopment', 'VisualBehaviorMultiscope', 'VisualBehaviorMultiscope4areasx2d', 'VisualBehaviorMultiscopeTask1G')"
              "order by date")
 
     #let's for now read stim type from mouse_director
