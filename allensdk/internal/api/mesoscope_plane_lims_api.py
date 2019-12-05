@@ -6,7 +6,7 @@ import matplotlib.image as mpimg
 from allensdk.api.cache import memoize
 import pandas as pd
 import logging
-from . import PostgresQueryMixin
+from allensdk.internal.api import PostgresQueryMixin
 logger = logging.getLogger(__name__)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
@@ -95,11 +95,11 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
     def get_max_projection(self, image_api=None):
         if image_api is None:
             image_api = ImageApi
-        maxInt_a13_file = self.get_max_projection_file()
-        if (self.get_surface_2p_pixel_size_um() == 0) :
+        max_int_a13_file = self.get_max_projection_file()
+        if self.get_surface_2p_pixel_size_um() == 0 :
             pixel_size = 400/512
         else : pixel_size = self.get_surface_2p_pixel_size_um()
-        max_projection = mpimg.imread(maxInt_a13_file)
+        max_projection = mpimg.imread(max_int_a13_file)
         return image_api.serialize(max_projection, [pixel_size / 1000., pixel_size / 1000.], 'mm')
 
 
@@ -107,11 +107,11 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
     def get_average_projection(self, image_api=None):
         if image_api is None:
             image_api = ImageApi
-        avgint_a1X_file = self.get_average_intensity_projection_image_file()
-        if (self.get_surface_2p_pixel_size_um() == 0) :
+        avg_int_a1x_file = self.get_average_intensity_projection_image_file()
+        if self.get_surface_2p_pixel_size_um() == 0 :
             pixel_size = 400/512
         else : pixel_size = self.get_surface_2p_pixel_size_um()
-        average_image = mpimg.imread(avgint_a1X_file)
+        average_image = mpimg.imread(avg_int_a1x_file)
         return image_api.serialize(average_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
 
     @memoize
@@ -119,7 +119,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         if image_api is None:
             image_api = ImageApi
         segmentation_mask_image_file = self.get_segmentation_mask_image_file()
-        if (self.get_surface_2p_pixel_size_um() == 0) :
+        if self.get_surface_2p_pixel_size_um() == 0 :
             pixel_size = 400/512
         else : pixel_size = self.get_surface_2p_pixel_size_um()
         segmentation_mask_image = mpimg.imread(segmentation_mask_image_file)
