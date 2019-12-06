@@ -2,7 +2,7 @@ from allensdk.brain_observatory.behavior.behavior_ophys_session import BehaviorO
 from allensdk.internal.api.mesoscope_plane_lims_api import MesoscopePlaneLimsApi
 from allensdk.core.lazy_property import LazyProperty
 
-class  MesoscopeOphysPlane(BehaviorOphysSession):
+class  MesoscopePlane(BehaviorOphysSession):
 
     @classmethod
     def from_lims(cls, experiment_id):
@@ -32,3 +32,6 @@ class  MesoscopeOphysPlane(BehaviorOphysSession):
         self.segmentation_mask_image = LazyProperty(self.api.get_segmentation_mask_image)
         self.experiment_df = LazyProperty(self.api.get_experiment_df)
         self.ophys_session_id = LazyProperty(self.api.get_ophys_session_id)
+
+
+        self.ophys_timestamps = None

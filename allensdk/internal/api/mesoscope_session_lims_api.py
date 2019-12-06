@@ -116,22 +116,6 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         return os.path.join(sync_file_dir, sync_file_name)
 
 
-    def split_session_timestamps(self) -> pd.DataFrame:
-        '''split ophys timestamps'''
-        #this needs a check for dropped frames: compare timestamps with scanimage header's timestamps.
-        sync_file = self.get_sync_file()
-        timestamps = get_sync_data(sync_file)['ophys_frames']
-        planes_timestamps = pd.DataFrame(columns= ['plane_id', 'ophys_timestamps'], index = range(len(self.get_session_experiments())))
-        pairs = self.get_paired_experiments()
-        i = 0
-        for pair in range(len(pairs)):
-            planes_timestamps['plane_id'][i] = pairs[pair][0]
-            planes_timestamps['plane_id'][i+1] = pairs[pair][1]
-            planes_timestamps['ophys_timestamps'][i] = planes_timestamps['ophys_timestamps'][i+1] = timestamps[pair::len(pairs)]
-            i += 2
-        self.planes_timestamps = planes_timestamps
-        return self.planes_timestamps
-
 if __name__ == "__main__":
     test_session_id = 992201455
     ms = MesoscopeSessionLimsApi(test_session_id)

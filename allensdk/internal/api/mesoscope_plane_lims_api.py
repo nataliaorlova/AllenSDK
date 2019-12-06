@@ -12,7 +12,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
-    def __init__(self, experiment_id, session):
+    def __init__(self, experiment_id, do_run=True):
         """
         Notes
         -----
@@ -20,19 +20,20 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         -session is the session object created with MesoscopeSession class
         """
         self.experiment_id = experiment_id
-        self.session = session
-        self.session_id = None
+        self.session_id = None #this is set on session's level
         self.experiment_df = None
         self.ophys_timestamps = None
         super().__init__(experiment_id)
+        if do_run:
+            self.get_experiment_df()
 
-    def get_ophys_timestamps(self):
-        """returns ophys timestamps for given plane"""
-        if not self.session_id :
-            self.get_ophys_session_id()
-        plane_timestamps = self.session.get_plane_timestamps(self.ophys_experiment_id)
-        self.ophys_timestamps = plane_timestamps
-        return self.ophys_timestamps
+    # def get_ophys_timestamps(self):
+    #     """returns ophys timestamps for given plane"""
+    #     if not self.session_id :
+    #         self.get_ophys_session_id()
+    #     plane_timestamps = self.session.get_plane_timestamps(self.ophys_experiment_id)
+    #     self.ophys_timestamps = plane_timestamps
+    #     return self.ophys_timestamps
 
     def get_experiment_df(self):
         """experiment dataframe -
@@ -61,9 +62,9 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         self.experiment_df = pd.read_sql(query, api.get_connection())
         return self.experiment_df
 
-    def get_ophys_session_id(self):
-        """ophys mesoscope experiment session ID"""
-        return self.session.session_id
+    # def get_ophys_session_id(self):
+    #     """ophys mesoscope experiment session ID"""
+    #     return self.session.session_id
 
     @memoize
     def get_metadata(self):
@@ -145,14 +146,40 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             licks_df = pd.DataFrame({'time': lick_times})
         return licks_df
 
-# if __name__ == "__main__":
-    # test_experiment_id = 0000000
-    # ms = MesoscopePlaneLimsApi(test_experiment_id, session)
-    # print(f'Session ID: {ms.session_id}')
-    # print(f'Experiments in session: : {ms.get_session_experiments()}')
-    # print(f'Session folder: {type(ms.get_session_folder())}')
-    # print(f'Session data frame:: {type(ms.get_session_df())}')
-    #  print(f'Session splitting json: {ms.get_splitting_json()}')
-    # print(f'Session pairs: : {type(ms.get_paired_experiments())}')
-    # print(f'Session sync file: {type(ms.get_sync_file())}')
-    # print(f'Session timestamps, split: {type(ms.split_session_timestamps())}')
+    #Needs to be redefined, BehOphys returns 43 Hz
+    # @memoize
+    # def get_ophys_frame_rate(self):
+    #     ophys_timestamps = self.get_ophys_timestamps()
+    #     return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
+
+if __name__ == "__main__":
+    test_experiment_id = 839716139
+    mp = MesoscopePlaneLimsApi(test_experiment_id)
+    # print(f'Experiment ID : {mp.experiment_id}')
+    # print(f'Session ID: {mp.session_id}')
+    # print(f'Experiment data frame:: {mp.experiment_df}')
+    # print(f'Ophys Timestamps: {mp.ophys_timestamps}')
+    # print(f'Imaging depth: : {mp.get_imaging_depth()}')
+    # print(f'Max projection image: {mp.get_max_projection()}')
+    # print(f'Segm mask image: {mp.get_segmentation_mask_image()}')
+    # print(f'Licks: {mp.get_licks()}')
+    # print(f'Stim presentations: {mp.get_stimulus_presentations() }')
+    # print(f'Sync data: {mp.get_sync_data()}')
+    # print(f'Task parameters: {mp.get_task_parameters()}')
+    #print(f'DB connection: {mp.get_connection()}')
+    # print(f'Targeted structure: {mp.get_targeted_structure()}')
+    # print(f'stimulus_timestamps: {mp.get_stimulus_timestamps()}')
+    # print(f'experiment container: {mp.get_experiment_container_id()}')
+    # print(f'beh stim file: {mp.get_behavior_stimulus_file()}')
+    # print(f'beh session uuid: {mp.get_behavior_session_uuid()}')
+    # print(f'stim framerate: {mp.get_stimulus_frame_rate()}')
+    # print(f'ophys framerate: {mp.get_ophys_frame_rate()}') #returns total framerate, not per plane for now redefine on session level
+    # print(f'metadata: {mp.get_metadata()}')
+    #print(f'dff traces: {mp.get_dff_traces()}')
+    #print(f'running data df: {mp.get_running_data_df()}') #doesn't work foe meso experiment
+    #print(f'running speed: {mp.get_running_speed()}') #doesn't work for meso
+    # print(f'stim templates: {mp.get_stimulus_templates()}')
+    # print(f'rewards: {mp.get_rewards()}')
+    # print(f'corrected fl traces: {mp.get_corrected_fluorescence_traces()}')
+    # print(f'motion correction: {mp.get_motion_correction()}')
+    #print(f'NWB filepath: {mp.get_nwb_filepath()}') #doesn't wokr for meso
