@@ -13,6 +13,12 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
     def __init__(self, experiment_id, session):
+        """
+        Notes
+        -----
+        -experiment_id is the same as experiment id in lims
+        -session is the session object created with MesoscopeSession class
+        """
         self.experiment_id = experiment_id
         self.session = session
         self.session_id = None
@@ -21,19 +27,19 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         super().__init__(experiment_id)
 
     def get_ophys_timestamps(self):
+        """returns ophys timestamps for given plane"""
         if not self.session_id :
             self.get_ophys_session_id()
-
         plane_timestamps = self.session.get_plane_timestamps(self.ophys_experiment_id)
         self.ophys_timestamps = plane_timestamps
         return self.ophys_timestamps
 
     def get_experiment_df(self):
-
+        """experiment dataframe -
+            overwrites  BehaviorOphysLimsApi.get_ophys_experiment_df"""
         api = PostgresQueryMixin()
         query = ''' 
                 SELECT 
-                
                 oe.id as experiment_id, 
                 os.id as session_id, 
                 oe.storage_directory as experiment_folder,
@@ -44,33 +50,31 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
                 os.parent_session_id as parent_id,
                 oe.workflow_state as workflow_state,
                 os.stimulus_name as stimulus
-                
                 FROM ophys_experiments oe
                 JOIN ophys_sessions os ON os.id = oe.ophys_session_id 
                 JOIN specimens sp ON sp.id = os.specimen_id  
                 JOIN imaging_depths ON imaging_depths.id = oe.imaging_depth_id 
                 JOIN structures st ON st.id = oe.targeted_structure_id 
-                
                 AND oe.id='{}'
                 '''
-
         query = query.format(self.get_ophys_experiment_id())
         self.experiment_df = pd.read_sql(query, api.get_connection())
         return self.experiment_df
 
     def get_ophys_session_id(self):
+        """ophys mesoscope experiment session ID"""
         return self.session.session_id
 
     @memoize
     def get_metadata(self):
-
+        """ophys experiment session metadata """ # this needs better definition
         metadata = super().get_metadata()
         metadata['ophys_experiment_id'] = self.get_ophys_experiment_id()
         metadata['experiment_container_id'] = self.get_experiment_container_id()
         metadata['ophys_frame_rate'] = self.get_ophys_frame_rate()
         metadata['stimulus_frame_rate'] = self.get_stimulus_frame_rate()
         metadata['targeted_structure'] = self.get_targeted_structure()
-        metadata['imaging_depth'] = self.get_imaging_depth() #this is redefined below
+        metadata['imaging_depth'] = self.get_imaging_depth() #redefined below
         metadata['session_type'] = self.get_stimulus_name()
         metadata['experiment_datetime'] = self.get_experiment_date()
         metadata['reporter_line'] = self.get_reporter_line()
@@ -78,11 +82,11 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         metadata['LabTracks_ID'] = self.get_external_specimen_name()
         metadata['full_genotype'] = self.get_full_genotype()
         metadata['behavior_session_uuid'] = uuid.UUID(self.get_behavior_session_uuid())
-
         return metadata
 
     @memoize
-    def get_imaging_depth(self):
+    def get_imaging_depth(self) -> int:
+        """lims query to retrieve imaging depth"""
         query = '''
                 SELECT id.depth
                 FROM ophys_experiments oe
@@ -93,6 +97,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
     @memoize
     def get_max_projection(self, image_api=None):
+        """overwrites BehaviorOphysLimsApi.get_ophys_experiment_df as no pixel resolution is
+            stored for many mesoscope experiments"""
         if image_api is None:
             image_api = ImageApi
         max_int_a13_file = self.get_max_projection_file()
@@ -105,6 +111,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
 
     @memoize
     def get_average_projection(self, image_api=None):
+
         if image_api is None:
             image_api = ImageApi
         avg_int_a1x_file = self.get_average_intensity_projection_image_file()
@@ -138,4 +145,14 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             licks_df = pd.DataFrame({'time': lick_times})
         return licks_df
 
-
+# if __name__ == "__main__":
+    # test_experiment_id = 0000000
+    # ms = MesoscopePlaneLimsApi(test_experiment_id, session)
+    # print(f'Session ID: {ms.session_id}')
+    # print(f'Experiments in session: : {ms.get_session_experiments()}')
+    # print(f'Session folder: {type(ms.get_session_folder())}')
+    # print(f'Session data frame:: {type(ms.get_session_df())}')
+    #  print(f'Session splitting json: {ms.get_splitting_json()}')
+    # print(f'Session pairs: : {type(ms.get_paired_experiments())}')
+    # print(f'Session sync file: {type(ms.get_sync_file())}')
+    # print(f'Session timestamps, split: {type(ms.split_session_timestamps())}')

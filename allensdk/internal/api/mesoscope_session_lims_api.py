@@ -1,6 +1,8 @@
 import pandas as pd
 import json
 import os
+from typing import List
+
 from allensdk.internal.core.lims_utilities import safe_system_path
 from allensdk.internal.api import PostgresQueryMixin
 from allensdk.brain_observatory.behavior.sync import get_sync_data
@@ -12,6 +14,12 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 class MesoscopeSessionLimsApi(PostgresQueryMixin):
 
     def __init__(self, session_id):
+        """
+        Class to access session-level Mesoscope data in LIMS. Features unique to mesoscope: splitting of the timestamps,
+        queries to access pairing of the planes, while it is missing from the DB
+        -----
+        :param session_id: same as session is in LIMS
+        """
         self.session_id = session_id
         self.experiment_ids = None
         self.pairs = None
@@ -22,7 +30,7 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         self.planes_timestamps = None
         super().__init__()
 
-    def get_well_known_file(self, file_type):
+    def get_well_known_file(self, file_type) -> str:
         """Gets a well_known_file's location"""
         query = ' '.join(['SELECT wkf.storage_directory, wkf.filename FROM well_known_files wkf',
                            'JOIN well_known_file_types wkft',
@@ -35,10 +43,12 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         filepath = pd.read_sql(query, self.get_connection())
         return filepath
 
-    def get_session_id(self):
+    def get_session_id(self) -> int:
+        '''session id'''
         return self.session_id
 
-    def get_session_experiments(self):
+    def get_session_experiments(self) -> pd.DataFrame:
+        '''experiments in this session'''
         query = ' '.join((
             "SELECT oe.id as experiment_id",
             "FROM ophys_experiments oe",
@@ -47,13 +57,15 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         self.experiment_ids = pd.read_sql(query.format(self.get_session_id()), self.get_connection())
         return self.experiment_ids
 
-    def get_session_folder(self):
+    def get_session_folder(self) -> str:
+        '''Session folder'''
         _session = pd.DataFrame(self.get_session_df())
         session_folder = _session['session_folder']
         self.session_folder = safe_system_path(session_folder.values[0])
         return self.session_folder
 
-    def get_session_df(self):
+    def get_session_df(self) -> pd.DataFrame:
+        '''Dataframe on session information'''
         query = ' '.join(("SELECT oe.id as experiment_id, os.id as session_id, os.name as ses_name"
                     ", os.storage_directory as session_folder, oe.storage_directory as experiment_folder",
                     ", sp.name as specimen",
@@ -75,7 +87,9 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         self.session_df = pd.read_sql(query, self.get_connection())
         return self.session_df
 
-    def get_splitting_json(self):
+    def get_splitting_json(self) -> str:
+        #this is only necessary while information on planes pairs is not yet added to lims
+        '''returns path to session's splitting json'''
         session_folder = self.get_session_folder()
         """this info should not be read form splitting json, but right now this info is not stored in the database"""
         json_path = os.path.join(session_folder, f"MESOSCOPE_FILE_SPLITTING_QUEUE_{self.session_id}_input.json")
@@ -84,7 +98,8 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
             logger.error("Unable to find splitting json for session: {}".format(self.session_id))
         return self.splitting_json
 
-    def get_paired_experiments(self):
+    def get_paired_experiments(self) -> List[List[int]]:
+        '''returns list of pairs for given session'''
         splitting_json = self.get_splitting_json()
         self.pairs = []
         with open(splitting_json, "r") as f:
@@ -93,15 +108,16 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
             self.pairs.append([p["experiment_id"] for p in pg.get("ophys_experiments", [])])
         return self.pairs
 
-    def get_sync_file(self):
-            sync_file_df = self.get_well_known_file(file_type='OphysRigSync')
-            sync_file_dir = safe_system_path(sync_file_df['storage_directory'].values[0])
-            sync_file_name = sync_file_df['filename'].values[0]
-            return os.path.join(sync_file_dir, sync_file_name)
+    def get_sync_file(self) -> str:
+        '''get sync file for given session'''
+        sync_file_df = self.get_well_known_file(file_type='OphysRigSync')
+        sync_file_dir = safe_system_path(sync_file_df['storage_directory'].values[0])
+        sync_file_name = sync_file_df['filename'].values[0]
+        return os.path.join(sync_file_dir, sync_file_name)
 
 
-    def split_session_timestamps(self):
-
+    def split_session_timestamps(self) -> pd.DataFrame:
+        '''split ophys timestamps'''
         #this needs a check for dropped frames: compare timestamps with scanimage header's timestamps.
         sync_file = self.get_sync_file()
         timestamps = get_sync_data(sync_file)['ophys_frames']
@@ -117,15 +133,16 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         return self.planes_timestamps
 
 if __name__ == "__main__":
-    ms = MesoscopeSessionLimsApi(992201455)
-    print(f'Session ID: {ms.session_id}')
-    print(f'Experiments in session: : {ms.get_session_experiments()}')
-    print(f'Session folder: {ms.get_session_folder()}')
-    print(f'Session data frame:: {ms.get_session_df()}')
-    print(f'Session splitting json: {ms.get_splitting_json()}')
-    print(f'Session pairs: : {ms.get_paired_experiments()}')
-    print(f'Session sync file: {ms.get_sync_file()}')
-    print(f'Session timestamps, split: {ms.split_session_timestamps()}')
+    test_session_id = 992201455
+    ms = MesoscopeSessionLimsApi(test_session_id)
+    # print(f'Session ID: {ms.session_id}')
+    # print(f'Experiments in session: : {ms.get_session_experiments()}')
+    # print(f'Session folder: {type(ms.get_session_folder())}')
+    # print(f'Session data frame:: {type(ms.get_session_df())}')
+    #  print(f'Session splitting json: {ms.get_splitting_json()}')
+    # print(f'Session pairs: : {type(ms.get_paired_experiments())}')
+    # print(f'Session sync file: {type(ms.get_sync_file())}')
+    # print(f'Session timestamps, split: {type(ms.split_session_timestamps())}')
 
 
 
