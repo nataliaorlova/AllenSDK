@@ -5,6 +5,7 @@ import uuid
 import matplotlib.image as mpimg
 from allensdk.api.cache import memoize
 import pandas as pd
+import numpy as np
 import logging
 from allensdk.internal.api import PostgresQueryMixin
 logger = logging.getLogger(__name__)
@@ -20,9 +21,10 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         -session is the session object created with MesoscopeSession class
         """
         self.experiment_id = experiment_id
+        self.experiments = None #set on session's level
         self.session_id = None #this is set on session's level
         self.experiment_df = None
-        self.ophys_timestamps = None
+        self.ophys_timestamps = None #set on sessin's level
         super().__init__(experiment_id)
         if do_run:
             self.get_experiment_df()
@@ -35,7 +37,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
     #     self.ophys_timestamps = plane_timestamps
     #     return self.ophys_timestamps
 
-    def get_experiment_df(self):
+    def get_experiment_df(self) -> pd.DataFrame:
         """experiment dataframe -
             overwrites  BehaviorOphysLimsApi.get_ophys_experiment_df"""
         api = PostgresQueryMixin()
@@ -67,7 +69,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
     #     return self.session.session_id
 
     @memoize
-    def get_metadata(self):
+    def get_metadata(self) -> pd.DataFrame:
         """ophys experiment session metadata """ # this needs better definition
         metadata = super().get_metadata()
         metadata['ophys_experiment_id'] = self.get_ophys_experiment_id()
@@ -97,21 +99,21 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         return self.fetchone(query, strict=True)
 
     @memoize
-    def get_max_projection(self, image_api=None):
+    def get_max_projection(self, image_api=None) :
         """overwrites BehaviorOphysLimsApi.get_ophys_experiment_df as no pixel resolution is
             stored for many mesoscope experiments"""
         if image_api is None:
             image_api = ImageApi
         max_int_a13_file = self.get_max_projection_file()
         if self.get_surface_2p_pixel_size_um() == 0 :
-            pixel_size = 400/512
+            pixel_size = 400/512 # this should not be release. fix wiritn pixel size to paltform.json and lims, then query from lims.
         else : pixel_size = self.get_surface_2p_pixel_size_um()
         max_projection = mpimg.imread(max_int_a13_file)
         return image_api.serialize(max_projection, [pixel_size / 1000., pixel_size / 1000.], 'mm')
 
 
     @memoize
-    def get_average_projection(self, image_api=None):
+    def get_average_projection(self, image_api=None): #what are we returning here?
 
         if image_api is None:
             image_api = ImageApi
@@ -123,7 +125,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         return image_api.serialize(average_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
 
     @memoize
-    def get_segmentation_mask_image(self, image_api=None):
+    def get_segmentation_mask_image(self, image_api=None): #return type?
         if image_api is None:
             image_api = ImageApi
         segmentation_mask_image_file = self.get_segmentation_mask_image_file()
@@ -133,7 +135,7 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         segmentation_mask_image = mpimg.imread(segmentation_mask_image_file)
         return image_api.serialize(segmentation_mask_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
 
-    def get_licks(self): # here we read licks from sync, if they are absent, we read from pickle.
+    def get_licks(self) -> pd.DataFrame: # here we read licks from sync, if they are absent, we read from pickle.
         sync_file = self.get_sync_file()
         lick_times = get_sync_data(sync_file)['lick_times']
         licks_df = pd.DataFrame({'time': lick_times})
@@ -146,11 +148,10 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             licks_df = pd.DataFrame({'time': lick_times})
         return licks_df
 
-    #Needs to be redefined, BehOphys returns 43 Hz
-    # @memoize
-    # def get_ophys_frame_rate(self):
-    #     ophys_timestamps = self.get_ophys_timestamps()
-    #     return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
+    @memoize
+    def get_ophys_frame_rate(self):
+        ophys_timestamps = self.get_ophys_timestamps()
+        return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
 
 if __name__ == "__main__":
     test_experiment_id = 839716139
@@ -166,14 +167,14 @@ if __name__ == "__main__":
     # print(f'Stim presentations: {mp.get_stimulus_presentations() }')
     # print(f'Sync data: {mp.get_sync_data()}')
     # print(f'Task parameters: {mp.get_task_parameters()}')
-    #print(f'DB connection: {mp.get_connection()}')
+    # print(f'DB connection: {mp.get_connection()}')
     # print(f'Targeted structure: {mp.get_targeted_structure()}')
     # print(f'stimulus_timestamps: {mp.get_stimulus_timestamps()}')
     # print(f'experiment container: {mp.get_experiment_container_id()}')
     # print(f'beh stim file: {mp.get_behavior_stimulus_file()}')
     # print(f'beh session uuid: {mp.get_behavior_session_uuid()}')
     # print(f'stim framerate: {mp.get_stimulus_frame_rate()}')
-    # print(f'ophys framerate: {mp.get_ophys_frame_rate()}') #returns total framerate, not per plane for now redefine on session level
+    print(f'ophys framerate: {mp.get_ophys_frame_rate()}') # to test!
     # print(f'metadata: {mp.get_metadata()}')
     #print(f'dff traces: {mp.get_dff_traces()}')
     #print(f'running data df: {mp.get_running_data_df()}') #doesn't work foe meso experiment
