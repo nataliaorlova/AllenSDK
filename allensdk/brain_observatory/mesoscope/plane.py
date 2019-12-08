@@ -4,12 +4,7 @@ from allensdk.core.lazy_property import LazyProperty
 
 class  MesoscopePlane(BehaviorOphysSession):
 
-    @classmethod
-    def from_lims(cls, experiment_id):
-        return cls(api=MesoscopePlaneLimsApi(experiment_id))
-
     def __init__(self, api=None):
-
         self.api = api
         self.ophys_experiment_id = LazyProperty(self.api.get_ophys_experiment_id)
         self.max_projection = LazyProperty(self.api.get_max_projection)
@@ -32,6 +27,13 @@ class  MesoscopePlane(BehaviorOphysSession):
         self.segmentation_mask_image = LazyProperty(self.api.get_segmentation_mask_image)
         self.experiment_df = LazyProperty(self.api.get_experiment_df)
         self.ophys_session_id = LazyProperty(self.api.get_ophys_session_id)
-
-
         self.ophys_timestamps = None
+        super().__init__(api)
+
+    @classmethod
+    def from_lims(cls, experiment_id):
+        return cls(api=MesoscopePlaneLimsApi(experiment_id))
+
+if __name__ == "__main__":
+    test_experiment_id = 839716139
+    mp = MesoscopePlane(test_experiment_id)

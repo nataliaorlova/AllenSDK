@@ -5,7 +5,6 @@ import uuid
 import matplotlib.image as mpimg
 from allensdk.api.cache import memoize
 import pandas as pd
-import numpy as np
 import logging
 from allensdk.internal.api import PostgresQueryMixin
 logger = logging.getLogger(__name__)
@@ -18,16 +17,28 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         Notes
         -----
         -experiment_id is the same as experiment id in lims
-        -session is the session object created with MesoscopeSession class
         """
         self.experiment_id = experiment_id
         self.experiments = None #set on session's level
-        self.session_id = None #this is set on session's level
+        self.session_id = None #set on session level
+        self.ophys_frame_rate = None #set on session level
+        self.ophys_timestamps = None #set on session level
         self.experiment_df = None
-        self.ophys_timestamps = None #set on sessin's level
+        self.metadata = None
+        self.imaging_depth = None
+        self.segmentation_mask_image = None
+        self.max_projection_image = None
+        self.avgerage_projection_image = None
+        self.licks = None
         super().__init__(experiment_id)
         if do_run:
             self.get_experiment_df()
+            self.get_metadata()
+            self.get_imaging_depth()
+            self.get_max_projection()
+            self.get_average_projection()
+            self.get_segmentation_mask_image()
+            self.get_licks()
 
     # def get_ophys_timestamps(self):
     #     """returns ophys timestamps for given plane"""
@@ -85,7 +96,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         metadata['LabTracks_ID'] = self.get_external_specimen_name()
         metadata['full_genotype'] = self.get_full_genotype()
         metadata['behavior_session_uuid'] = uuid.UUID(self.get_behavior_session_uuid())
-        return metadata
+        self.metadata = metadata
+        return self.metadata
 
     @memoize
     def get_imaging_depth(self) -> int:
@@ -96,7 +108,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
                 JOIN imaging_depths id ON id.id = oe.imaging_depth_id 
                 WHERE oe.id= {};
                 '''.format(self.get_ophys_experiment_id())
-        return self.fetchone(query, strict=True)
+        self.imaging_depth = self.fetchone(query, strict=True)
+        return self.imaging_depth
 
     @memoize
     def get_max_projection(self, image_api=None) :
@@ -106,10 +119,11 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             image_api = ImageApi
         max_int_a13_file = self.get_max_projection_file()
         if self.get_surface_2p_pixel_size_um() == 0 :
-            pixel_size = 400/512 # this should not be release. fix wiritn pixel size to paltform.json and lims, then query from lims.
+            pixel_size = 400/512 # this should not be released. fix wiritng pixel size to paltform.json and lims, then query from lims.
         else : pixel_size = self.get_surface_2p_pixel_size_um()
         max_projection = mpimg.imread(max_int_a13_file)
-        return image_api.serialize(max_projection, [pixel_size / 1000., pixel_size / 1000.], 'mm')
+        self.max_projection_image = image_api.serialize(max_projection, [pixel_size / 1000., pixel_size / 1000.], 'mm')
+        return self.max_projection_image
 
 
     @memoize
@@ -122,7 +136,8 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             pixel_size = 400/512
         else : pixel_size = self.get_surface_2p_pixel_size_um()
         average_image = mpimg.imread(avg_int_a1x_file)
-        return image_api.serialize(average_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
+        self.average_projection_image = image_api.serialize(average_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
+        return self.average_projection_image
 
     @memoize
     def get_segmentation_mask_image(self, image_api=None): #return type?
@@ -133,9 +148,10 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             pixel_size = 400/512
         else : pixel_size = self.get_surface_2p_pixel_size_um()
         segmentation_mask_image = mpimg.imread(segmentation_mask_image_file)
-        return image_api.serialize(segmentation_mask_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
+        self.segmentation_mask_image = image_api.serialize(segmentation_mask_image, [pixel_size / 1000., pixel_size / 1000.], 'mm')
+        return self.segmentation_mask_image
 
-    def get_licks(self) -> pd.DataFrame: # here we read licks from sync, if they are absent, we read from pickle.
+    def get_licks(self) -> pd.DataFrame: # here we read licks from sync, if they are absent, we read from pkl.
         sync_file = self.get_sync_file()
         lick_times = get_sync_data(sync_file)['lick_times']
         licks_df = pd.DataFrame({'time': lick_times})
@@ -146,41 +162,42 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             stimulus_timestamps_no_monitor_delay = get_sync_data(sync_file)['stimulus_times_no_delay']
             lick_times  = stimulus_timestamps_no_monitor_delay[lick_frames]
             licks_df = pd.DataFrame({'time': lick_times})
-        return licks_df
+        self.licks =  licks_df
+        return self.licks
 
-    @memoize
-    def get_ophys_frame_rate(self):
-        ophys_timestamps = self.get_ophys_timestamps()
-        return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
+    # @memoize
+    # def get_ophys_frame_rate(self):
+    #     ophys_timestamps = self.get_ophys_timestamps()
+    #     return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
 
 if __name__ == "__main__":
     test_experiment_id = 839716139
     mp = MesoscopePlaneLimsApi(test_experiment_id)
-    # print(f'Experiment ID : {mp.experiment_id}')
-    # print(f'Session ID: {mp.session_id}')
-    # print(f'Experiment data frame:: {mp.experiment_df}')
-    # print(f'Ophys Timestamps: {mp.ophys_timestamps}')
-    # print(f'Imaging depth: : {mp.get_imaging_depth()}')
-    # print(f'Max projection image: {mp.get_max_projection()}')
-    # print(f'Segm mask image: {mp.get_segmentation_mask_image()}')
-    # print(f'Licks: {mp.get_licks()}')
-    # print(f'Stim presentations: {mp.get_stimulus_presentations() }')
-    # print(f'Sync data: {mp.get_sync_data()}')
-    # print(f'Task parameters: {mp.get_task_parameters()}')
-    # print(f'DB connection: {mp.get_connection()}')
-    # print(f'Targeted structure: {mp.get_targeted_structure()}')
-    # print(f'stimulus_timestamps: {mp.get_stimulus_timestamps()}')
-    # print(f'experiment container: {mp.get_experiment_container_id()}')
-    # print(f'beh stim file: {mp.get_behavior_stimulus_file()}')
-    # print(f'beh session uuid: {mp.get_behavior_session_uuid()}')
-    # print(f'stim framerate: {mp.get_stimulus_frame_rate()}')
-    print(f'ophys framerate: {mp.get_ophys_frame_rate()}') # to test!
-    # print(f'metadata: {mp.get_metadata()}')
-    #print(f'dff traces: {mp.get_dff_traces()}')
-    #print(f'running data df: {mp.get_running_data_df()}') #doesn't work foe meso experiment
-    #print(f'running speed: {mp.get_running_speed()}') #doesn't work for meso
-    # print(f'stim templates: {mp.get_stimulus_templates()}')
-    # print(f'rewards: {mp.get_rewards()}')
-    # print(f'corrected fl traces: {mp.get_corrected_fluorescence_traces()}')
-    # print(f'motion correction: {mp.get_motion_correction()}')
-    #print(f'NWB filepath: {mp.get_nwb_filepath()}') #doesn't wokr for meso
+    print(f'Experiment ID : {mp.experiment_id}')
+    print(f'Session ID: {mp.session_id}')
+    print(f'Experiment data frame:: {mp.experiment_df}')
+    print(f'Ophys Timestamps: {mp.ophys_timestamps}')
+    print(f'Imaging depth: : {mp.get_imaging_depth()}')
+    print(f'Max projection image: {mp.get_max_projection()}')
+    print(f'Segm mask image: {mp.get_segmentation_mask_image()}')
+    print(f'Licks: {mp.get_licks()}')
+    print(f'Stim presentations: {mp.get_stimulus_presentations() }')
+    print(f'Sync data: {mp.get_sync_data()}')
+    print(f'Task parameters: {mp.get_task_parameters()}')
+    print(f'DB connection: {mp.get_connection()}')
+    print(f'Targeted structure: {mp.get_targeted_structure()}')
+    print(f'stimulus_timestamps: {mp.get_stimulus_timestamps()}')
+    print(f'experiment container: {mp.get_experiment_container_id()}')
+    print(f'beh stim file: {mp.get_behavior_stimulus_file()}')
+    print(f'beh session uuid: {mp.get_behavior_session_uuid()}')
+    print(f'stim framerate: {mp.get_stimulus_frame_rate()}')
+    print(f'ophys framerate: {mp.get_ophys_frame_rate()}') # returns total framerate, needs splitting per plane
+    print(f'metadata: {mp.get_metadata()}')
+    print(f'dff traces: {mp.get_dff_traces()}')
+    # print(f'running data df: {mp.get_running_data_df()}') #doesn't work for meso
+    # print(f'running speed: {mp.get_running_speed()}') #doesn't work for meso
+    print(f'stim templates: {mp.get_stimulus_templates()}')
+    print(f'rewards: {mp.get_rewards()}')
+    print(f'corrected fl traces: {mp.get_corrected_fluorescence_traces()}')
+    print(f'motion correction: {mp.get_motion_correction()}')
+    # print(f'NWB filepath: {mp.get_nwb_filepath()}') #doesn't work for meso
