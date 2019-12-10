@@ -8,19 +8,19 @@ class MesoscopeSession(LazyPropertyMixin):
 
     def __init__(self, do_run=False, api=None):
         self.api = api
-        self.planes = [] #pd.DataFrame(columns=['plane_id', 'plane', 'ophys_timestamp'], index=range(len(self.experiments_ids['experiment_id'])))
+        self.planes = {} #pd.DataFrame(columns=['plane_id', 'plane', 'ophys_timestamp'], index=range(len(self.experiments_ids['experiment_id'])))
         super().__init__()
-        self.session_id = LazyProperty(self.api.get_session_id)
+        self.session_id = LazyProperty(self.api.session_id)
         self.session_df = LazyProperty(self.api.get_session_df)
-        self.experiments_ids = LazyProperty(self.api.get_session_experiments)
-        self.pairs = LazyProperty(self.api.get_paired_experiments)
+        self.experiments_ids = self.api.get_session_experiments()
+        self.pairs = self.api.get_paired_experiments()
         self.splitting_json =LazyProperty(self.api.get_splitting_json)
         self.folder = LazyProperty(self.api.get_session_folder)
         self.planes_timestamps = {}
         self.pair_num = len(self.pairs)
         if do_run:
-            self.get_planes()
             self.split_session_timestamps()
+            self.make_planes()
 
 
     @classmethod
@@ -31,7 +31,7 @@ class MesoscopeSession(LazyPropertyMixin):
         for exp_id in self.experiments_ids['experiment_id']:
             pl = MesoscopePlane(api = MesoscopePlaneLimsApi(exp_id))
             pl.ophys_timestamps = self.planes_timestamps[self.planes_timestamps.plane_id == exp_id].reset_index().loc[0, 'ophys_timestamps']
-            self.planes.append(pl)
+            self.planes[exp_id]=pl
         return self.planes
 
     def split_session_timestamps(self) -> dict:
@@ -51,11 +51,12 @@ class MesoscopeSession(LazyPropertyMixin):
 
 if __name__ == "__main__":
     session_id = 992393325
-    session = MesoscopeSession.from_lims(session_id)
+    ses = MesoscopeSession.from_lims(session_id)
     pd.options.display.width = 0
-    planes = session.get_planes()
-    print(planes)
-    #print(session.session_df)
+    print(f"planes : {ses.planes}")
+    print(f'Session ID: {ses.session_id}')
+    print(f'Session DataFrame: {ses.session_df}')
+    print(f'Session .session_df)
     #plane = planes[planes.plane_id == 807310592].plane.values[0]
     #print(plane.licks)
 

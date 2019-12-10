@@ -60,8 +60,8 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
             "FROM ophys_experiments oe",
             "WHERE oe.ophys_session_id = {}"
         ))
-        self.experiment_ids = pd.read_sql(query.format(self.session_id), self.get_connection())
-        return self.experiment_ids
+        return pd.read_sql(query.format(self.session_id), self.get_connection())
+
 
     def get_session_df(self) -> pd.DataFrame:
         """Dataframe on session information"""
@@ -124,11 +124,11 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
 if __name__ == "__main__":
     test_session_id = 992201455
     ms = MesoscopeSessionLimsApi(test_session_id)
-    # print(f'Session ID: {ms.session_id}')
-    # print(f'Experiments in session: : {ms.get_session_experiments()}')
-    # print(f'Session folder: {type(ms.get_session_folder())}')
-    # print(f'Session data frame:: {type(ms.get_session_df())}')
-    #  print(f'Session splitting json: {ms.get_splitting_json()}')
-    # print(f'Session pairs: : {type(ms.get_paired_experiments())}')
-    # print(f'Session sync file: {type(ms.get_sync_file())}')
-    # print(f'Session timestamps, split: {type(ms.split_session_timestamps())}')
+    print(f'Session ID: {ms.session_id}')
+    print(f'Experiments in session: {ms.get_session_experiments()}')
+    print(f'Session folder: {ms.get_session_folder()}')
+    print(f'Session data frame: {ms.get_session_df()}')
+    print(f'Session splitting json: {ms.get_splitting_json()}')
+    print(f'Session pairs: {ms.get_paired_experiments()}')
+    print(f'Session sync file: {ms.get_sync_file()}')
+    #print(f'Session timestamps, split: {ms.split_session_timestamps()}')
