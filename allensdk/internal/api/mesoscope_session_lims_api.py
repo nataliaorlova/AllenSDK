@@ -5,7 +5,6 @@ from typing import List
 
 from allensdk.internal.core.lims_utilities import safe_system_path
 from allensdk.internal.api import PostgresQueryMixin
-from allensdk.brain_observatory.behavior.sync import get_sync_data
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,9 +27,10 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         self.session_id = session_id
         self.experiment_ids = None
         self.pairs = None
+        self.planes = None
+        self.session_df = None
         self.splitting_json = None
         self.session_folder = None
-        self.session_df = None
         self.sync_path = None
         super().__init__()
         if do_run:
@@ -120,7 +120,6 @@ class MesoscopeSessionLimsApi(PostgresQueryMixin):
         sync_file_name = sync_file_df['filename'].values[0]
         return os.path.join(sync_file_dir, sync_file_name)
 
-
 if __name__ == "__main__":
     test_session_id = 992201455
     ms = MesoscopeSessionLimsApi(test_session_id)
@@ -131,4 +130,5 @@ if __name__ == "__main__":
     print(f'Session splitting json: {ms.get_splitting_json()}')
     print(f'Session pairs: {ms.get_paired_experiments()}')
     print(f'Session sync file: {ms.get_sync_file()}')
+    print(f'Session ohys timestamps : {ms.ophys_timestamps}')
     #print(f'Session timestamps, split: {ms.split_session_timestamps()}')

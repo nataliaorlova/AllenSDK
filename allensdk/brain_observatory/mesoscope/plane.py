@@ -12,6 +12,7 @@ class MesoscopePlane(BehaviorOphysSession):
         super().__init__()
         self.api = api
 
+
     @property
     def experiment_df(self) -> int:
         """Information about this experiment.
@@ -70,6 +71,13 @@ class MesoscopePlane(BehaviorOphysSession):
         :return: pandas.DataFrame
         """
         return self.api.get_licks()
+
+    def ophys_timestamps(self):
+        return None
+
+    def set_ophys_timestamps(self, value):
+        self.ophys_timestamps = value
+        return
 
 
 if __name__ == "__main__":
