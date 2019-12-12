@@ -19,7 +19,6 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         -experiment_id is the same as experiment id in lims
         """
         self.experiment_id = experiment_id
-        self.experiments = None #set on session's level
         self.session_id = None #set on session level
         self.ophys_frame_rate = None #set on session level
         self.ophys_timestamps = None #set on session level
@@ -40,13 +39,6 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
             self.get_segmentation_mask_image()
             self.get_licks()
 
-    # def get_ophys_timestamps(self):
-    #     """returns ophys timestamps for given plane"""
-    #     if not self.session_id :
-    #         self.get_ophys_session_id()
-    #     plane_timestamps = self.session.get_plane_timestamps(self.ophys_experiment_id)
-    #     self.ophys_timestamps = plane_timestamps
-    #     return self.ophys_timestamps
 
     def get_experiment_df(self) -> pd.DataFrame:
         """experiment dataframe -
@@ -75,9 +67,6 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         self.experiment_df = pd.read_sql(query, api.get_connection())
         return self.experiment_df
 
-    # def get_ophys_session_id(self):
-    #     """ophys mesoscope experiment session ID"""
-    #     return self.session.session_id
 
     @memoize
     def get_metadata(self) -> pd.DataFrame:
@@ -165,10 +154,10 @@ class MesoscopePlaneLimsApi(BehaviorOphysLimsApi):
         self.licks =  licks_df
         return self.licks
 
-    # @memoize
-    # def get_ophys_frame_rate(self):
-    #     ophys_timestamps = self.get_ophys_timestamps()
-    #     return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
+    @memoize
+    def get_ophys_frame_rate(self):
+        ophys_timestamps = self.get_ophys_timestamps()
+        return np.round(1 / np.mean(np.diff(ophys_timestamps)), 0)
 
 if __name__ == "__main__":
     test_experiment_id = 839716139

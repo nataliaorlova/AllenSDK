@@ -79,6 +79,12 @@ class MesoscopePlane(BehaviorOphysSession):
         self.ophys_timestamps = value
         return
 
+    def ophys_framerate(self):
+        return None
+
+    def set_ophys_framerate(self, value):
+        self.ophys_framerate = value
+        return
 
 if __name__ == "__main__":
     test_experiment_id = 839716139
