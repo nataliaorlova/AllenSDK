@@ -14,6 +14,7 @@ class MesoscopeSession(LazyPropertyMixin):
         self.planes = {}
         self.session_ophys_timestamps = None
         self.plane_ophys_framerate = None
+        self.planes_timestamps = {}
         self.session_id = self.api.session_id
         self.session_df = LazyProperty(self.api.get_session_df)
         self.experiments_ids = LazyProperty(self.api.get_session_experiments)
@@ -21,11 +22,11 @@ class MesoscopeSession(LazyPropertyMixin):
         self.splitting_json =LazyProperty(self.api.get_splitting_json)
         self.folder = LazyProperty(self.api.get_session_folder)
         self.pair_num = len(self.pairs)
-        self.planes_timestamps = self.split_session_timestamps()
         if do_run:
+            self.get_session_timestamps()
+            self.split_session_timestamps()
             self.make_ophys_framerate()
             self.make_planes()
-
 
     @classmethod
     def from_lims(cls, session_id) :
@@ -36,7 +37,7 @@ class MesoscopeSession(LazyPropertyMixin):
         """
         return cls(api=MesoscopeSessionLimsApi(session_id))
 
-    def make_planes(self) -> dict:
+    def make_planes(self) :
         """
         Create a Mesoscope palne object for each experiment in session identified by their experiment ids
         :return: dict[int: allensdk.brain_observatory.mesoscope.plane.MesoscopePlane]
@@ -47,21 +48,25 @@ class MesoscopeSession(LazyPropertyMixin):
             pl.session_id = self.session_id
             pl.set_ophys_framerate(self.plane_ophys_framerate)
             self.planes[exp_id]=pl
-        return self.planes
+        return
 
-    def split_session_timestamps(self) -> dict:
+    def get_session_timestamps(self):
+        sync_file = self.api.get_sync_file()
+        self.session_ophys_timestamps = get_sync_data(sync_file)['ophys_frames']
+        return self.session_ophys_timestamps
+
+    def split_session_timestamps(self) :
         """
         split sessions timestamps for individual experiments
         :return: dict[int : [float]]
         """
         #need to check for dropped frames: compare timestamps from sync file to SI's header timestamps
-        sync_file = self.api.get_sync_file()
-        self.session_ophys_timestamps = get_sync_data(sync_file)['ophys_frames']
+
         planes_timestamps = {}
         for pair in range(self.pair_num):
             planes_timestamps[self.pairs[pair][0]] = planes_timestamps[self.pairs[pair][1]] = self.session_ophys_timestamps[pair::self.pair_num]
         self.planes_timestamps = planes_timestamps
-        return self.planes_timestamps
+        return
 
     def make_ophys_framerate(self)  -> np.float64:
         """
@@ -99,13 +104,9 @@ if __name__ == "__main__":
     print(f'Number of pairs: {ses.pair_num}')
     print(f'Sessions pairs: {ses.pairs}')
     print(f'Session timestamps, split: {ses.planes_timestamps}')
-    print(f"Planes : {ses.planes}")
-    print()
-    # print(f'Session DataFrame: {ses.session_df}')
-    # print(f'Splitting json: {ses.splitting_json}')
+    print(f'Planes : {ses.planes}')
+    # print('')
 
-
-    #print(plane.licks)
 
 
 
