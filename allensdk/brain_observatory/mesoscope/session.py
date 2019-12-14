@@ -45,7 +45,6 @@ class MesoscopeSession(LazyPropertyMixin):
         for exp_id in self.experiments_ids['experiment_id']:
             pl = MesoscopePlane(api = MesoscopePlaneLimsApi(exp_id))
             pl.set_ophys_timestamps(self.planes_timestamps[exp_id])
-            pl.session_id = self.session_id
             pl.set_ophys_framerate(self.plane_ophys_framerate)
             self.planes[exp_id]=pl
         return
@@ -105,7 +104,6 @@ if __name__ == "__main__":
     print(f'Sessions pairs: {ses.pairs}')
     print(f'Session timestamps, split: {ses.planes_timestamps}')
     print(f'Planes : {ses.planes}')
-    # print('')
 
 
 

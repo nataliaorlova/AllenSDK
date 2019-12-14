@@ -8,10 +8,14 @@ class MesoscopePlane(BehaviorOphysSession):
     def from_lims(cls, experiment_id):
         return cls(api=MesoscopePlaneLimsApi(experiment_id))
 
-    def __init__(self, api=None):
+    def __init__(self, do_run=True, api=None):
         super().__init__()
         self.api = api
-
+        self.experiment_id = self.ophys_experiment_id
+        self.ophys_frame_rate = None #set on session level
+        self.ophys_timestamps = None #set on session level
+        if do_run:
+            self.session_id = self.api.get_session_id()
 
     @property
     def experiment_df(self) -> int:
@@ -87,15 +91,16 @@ class MesoscopePlane(BehaviorOphysSession):
         return
 
 if __name__ == "__main__":
-    test_experiment_id = 839716139
-    mp = MesoscopePlane.from_lims(test_experiment_id)
+    exp_id = 839716139
+    mp = MesoscopePlane.from_lims(exp_id)
+    print(f'Session ID: {mp.session_id}')
     print(f'Experiment ID: {mp.ophys_experiment_id}')
-    print(f'Metadata: {mp.metadata}')
-    print(f'Experiment DF: {mp.experiment_df}')
-    print(f'Imaging depth: {mp.imaging_depth}')
-    print(f'Max projection image: {mp.max_projection}')
-    print(f'Average projection image : {mp.average_projection}')
-    print(f'Segmentation mask image: {mp.segmentation_mask_image}')
+    # print(f'Metadata: {mp.metadata}')
+    # print(f'Experiment DF: {mp.experiment_df}')
+    # print(f'Imaging depth: {mp.imaging_depth}')
+    # print(f'Max projection image: {mp.max_projection}')
+    # print(f'Average projection image : {mp.average_projection}')
+    # print(f'Segmentation mask image: {mp.segmentation_mask_image}')
     print(f'Licks: {mp.licks}')
 
 

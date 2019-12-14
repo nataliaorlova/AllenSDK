@@ -130,5 +130,5 @@ if __name__ == "__main__":
     print(f'Session splitting json: {ms.get_splitting_json()}')
     print(f'Session pairs: {ms.get_paired_experiments()}')
     print(f'Session sync file: {ms.get_sync_file()}')
-    print(f'Session ohys timestamps : {ms.ophys_timestamps}')
+    #print(f'Session ohys timestamps : {ms.ophys_timestamps}')
     #print(f'Session timestamps, split: {ms.split_session_timestamps()}')
