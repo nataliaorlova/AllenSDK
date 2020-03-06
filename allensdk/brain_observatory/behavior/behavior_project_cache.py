@@ -2,7 +2,7 @@ import numpy as np
 import os.path
 import csv
 from functools import partial
-from typing import Type, Callable, Optional, List, Any
+from typing import Type, Callable, Optional, List, Any, Dict
 import pandas as pd
 import time
 import logging
@@ -15,6 +15,8 @@ from allensdk.brain_observatory.behavior.internal.behavior_project_base\
     import BehaviorProjectBase
 from allensdk.api.caching_utilities import one_file_call_caching, call_caching
 from allensdk.core.exceptions import MissingDataError
+from allensdk.core.auth_config import LIMS_DB_CREDENTIAL_MAP
+from allensdk.core.authentication import credential_injector, DbCredentials
 
 BehaviorProjectApi = Type[BehaviorProjectBase]
 
@@ -60,7 +62,7 @@ class BehaviorProjectCache(Cache):
 
     def __init__(
             self,
-            fetch_api: BehaviorProjectApi = BehaviorProjectLimsApi.default(),
+            fetch_api: Optional[BehaviorProjectApi] = None,
             fetch_tries: int = 2,
             **kwargs):
         """ Entrypoint for accessing visual behavior data. Supports
@@ -104,14 +106,18 @@ class BehaviorProjectCache(Cache):
         kwargs["version"] = kwargs.get("version", self.MANIFEST_VERSION)
 
         super().__init__(**kwargs)
-        self.fetch_api = fetch_api
+        self.fetch_api = fetch_api or BehaviorProjectLimsApi.default()
         self.fetch_tries = fetch_tries
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @classmethod
-    def from_lims(cls, lims_kwargs=None, **kwargs):
-        lims_kwargs_ = lims_kwargs or {}
-        return cls(fetch_api=BehaviorProjectLimsApi.default(**lims_kwargs_),
+    def from_lims(cls, lims_credentials: Optional[DbCredentials] = None,
+                  mtrain_credentials: Optional[DbCredentials] = None,
+                  app_kwargs: Dict[str, Any] = None, **kwargs):
+        return cls(fetch_api=BehaviorProjectLimsApi.default(
+                        lims_credentials=lims_credentials,
+                        mtrain_credentials=mtrain_credentials,
+                        app_kwargs=app_kwargs),
                    **kwargs)
 
     def get_session_table(

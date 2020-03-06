@@ -15,7 +15,7 @@ REG_PHOTODIODE_MIN = 1.9 # seconds
 REG_PHOTODIODE_MAX = 2.1 # seconds
 PHOTODIODE_ANOMALY_THRESHOLD = 0.5 # seconds
 LONG_STIM_THRESHOLD = 0.2 # seconds
-ASSUMED_DELAY = 0.0351 # seconds
+ASSUMED_DELAY = 0.0215 # seconds
 MAX_MONITOR_DELAY = 0.07 # seconds
 
 VERSION_1_KEYS = {
@@ -135,7 +135,7 @@ def get_video_length(filename):
 
 
 def get_ophys_data_length(filename):
-    with h5py.File(filename) as f:
+    with h5py.File(filename, "r") as f:
         return f["data"].shape[1]
 
 
@@ -284,7 +284,7 @@ class OphysTimeAligner(object):
         photodiode_key = self._keys["photodiode"]
         delay = monitor_delay(self.dataset, timestamps, photodiode_key)
         
-        return timestamps + delay, delta
+        return timestamps + delay, delta, delay
 
     @property
     def behavior_video_timestamps(self):

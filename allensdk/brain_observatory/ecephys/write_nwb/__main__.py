@@ -186,6 +186,81 @@ def scale_amplitudes(spike_amplitudes, templates, spike_templates, scale_factor=
     return spike_amplitudes
 
 
+def remove_invalid_spikes(
+    row: pd.Series, 
+    times_key: str = "spike_times", 
+    amps_key: str = "spike_amplitudes"
+) -> pd.Series:
+    """ Given a row from a units table, ensure that invalid spike times and 
+    corresponding amplitudes are removed. Also ensure the spikes are sorted 
+    ascending in time.
+
+    Parameters
+    ----------
+    row : a row representing a single sorted unit
+    times_key : name of column containing spike times
+    amps_key : name of column containing spike amplitudes
+
+    Returns
+    -------
+    A version of the input row, with spike times sorted and invalid times 
+    removed
+
+    Notes
+    -----
+    This function is needed because currently released NWB files might have 
+    invalid spike times. It can be removed if these files are updated.
+
+    """
+
+    out = row.copy(deep=True)
+
+    spike_times = np.array(out.pop(times_key))
+    amps = np.array(out.pop(amps_key))
+
+    valid = spike_times >= 0
+    spike_times = spike_times[valid]
+    amps = amps[valid]
+
+    order = np.argsort(spike_times)
+    out[times_key] = spike_times[order]
+    out[amps_key] = amps[order]
+
+    return out
+
+
+def remove_invalid_spikes_from_units(
+    units: pd.DataFrame,
+    times_key: str = "spike_times", 
+    amps_key: str = "spike_amplitudes"
+) -> pd.DataFrame:
+    """ Given a units table, ensure that invalid spike times and 
+    corresponding amplitudes are removed. Also ensure the spikes are sorted 
+    ascending in time.
+
+    Parameters
+    ----------
+    units : A units table
+    times_key : name of column containing spike times
+    amps_key : name of column containing spike amplitudes
+
+    Returns
+    -------
+    A version of the input table, with spike times sorted and invalid times 
+    removed
+
+    Notes
+    -----
+    This function is needed because currently released NWB files might have 
+    invalid spike times. It can be removed if these files are updated.
+
+    """
+
+    remover = partial(
+        remove_invalid_spikes, times_key=times_key, amps_key=amps_key)
+    return units.apply(remover, axis=1)
+
+
 def group_1d_by_unit(data, data_unit_map, local_to_global_unit_map=None):
     sort_order = np.argsort(data_unit_map, kind="stable")
     data_unit_map = data_unit_map[sort_order]
@@ -639,6 +714,7 @@ def add_probewise_data_to_nwbfile(nwbfile, probes):
     electrodes_table = fill_df(pd.concat(list(channel_tables.values())))
     nwbfile.electrodes = pynwb.file.ElectrodeTable().from_dataframe(electrodes_table, name='electrodes')
     units_table = pd.concat(unit_tables).set_index(keys='id', drop=True)
+    units_table = remove_invalid_spikes_from_units(units_table)
     nwbfile.units = pynwb.misc.Units.from_dataframe(fill_df(units_table), name='units')
 
     add_ragged_data_to_dynamic_table(
@@ -775,10 +851,9 @@ def write_ecephys_nwb(
                                                  eye_gaze_data=eye_gaze_data)
 
     Manifest.safe_make_parent_dirs(output_path)
-    io = pynwb.NWBHDF5IO(output_path, mode='w')
-    logging.info(f"writing session nwb file to {output_path}")
-    io.write(nwbfile)
-    io.close()
+    with pynwb.NWBHDF5IO(output_path, mode='w') as io:
+        logging.info(f"writing session nwb file to {output_path}")
+        io.write(nwbfile, cache_spec=True)
 
     probes_with_lfp = [p for p in probes if p["lfp"] is not None]
     probe_outputs = write_probewise_lfp_files(probes_with_lfp, session_start_time, pool_size=pool_size)
