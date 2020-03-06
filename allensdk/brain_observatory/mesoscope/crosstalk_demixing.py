@@ -1,5 +1,5 @@
-from allensdk.brain_observatory.mesoscope.mesoscope_plane import MesoscopeOphysPlane
-from allensdk.brain_observatory.mesoscope.mesoscope_session import MesoscopeSession
+from allensdk.brain_observatory.mesoscope.plane import MesoscopePlane
+from allensdk.brain_observatory.mesoscope.session import MesoscopeSession
 from allensdk.internal.api.mesoscope_plane_lims_api import MesoscopePlaneLimsApi
 
 import os
@@ -10,8 +10,8 @@ class MesoICAPair(object):
 		self.session = MesoscopeSession.from_lims(session_id)
 		pairs = self.session.pairs
 		pair = pairs[pair_num]
-		self.plane1 = MesoscopeOphysPlane(api = MesoscopePlaneLimsApi(pair[0], self.session))
-		self.plane2 = MesoscopeOphysPlane(api = MesoscopePlaneLimsApi(pair[1], self.session))
+		self.plane1 = MesoscopePlane(api = MesoscopePlaneLimsApi(pair[0], self.session))
+		self.plane2 = MesoscopePlane(api = MesoscopePlaneLimsApi(pair[1], self.session))
 		self.session_id = session_id
 		self.cache = cache
 		self.session_dir = os.path.join(self.cache, f'session_{self.session_id}')
