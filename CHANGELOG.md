@@ -1,6 +1,39 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] = UPDATE\_DATE
+
+### Added
+- Internal users can now access `eye_tracking` ellipse fit data from behavior + ophys Session objects
+- A new mixin for managing processing parameters for Session objects
+- Added support for additional sync file line labels
+
+### Changed
+- Monitor delay calculation is updated to properly handle photodiode streams that end
+on a rising edge. We are no longer providing a default delay value in case of error.
+
+### Bug Fixes
+- experiment\_table from behavior project cache has NaNs in the 'imaging\_depth' column for MultiScope experiments due to incorrect join in behavior\_project\_lims\_api.py and 4 other places where ophys\_sessions was incorrectly queried for imaging\_depth\_id
+
+
+## [1.6.0] = 2020-03-23
+
+### Added
+- tutorial for optotagging for ecephys notebook
+- get\_receptive\_field() method in ecephys receptive field mapping
+
+### Changed
+- remove redundant sham\_change column in behavior sessions.trials table
+- versions for NWB output for ecephys and ophys behavior.
+- monitor delay is now calculated for BehaviorOphysLimsApi rather than defaulting to 0.0351
+
+### Bug Fixes
+- Fixed a bug where auto-rewarded trials were not properly attributed in the rewards property of a visual behavior
+- return None rather than raise exception if no container id was returned from lims id for given ophys id
+- Project caches no longer accept arbitrary keywords
+- matplotloib.pyplot.hist parameter normed no longer supported
+
+
 ## [1.5.0] = 2020-02-10
 
 ### Added
