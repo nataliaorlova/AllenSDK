@@ -90,7 +90,20 @@ The Allen SDK provides Python code for accessing experimental metadata along wit
 
 See the `mouse connectivity section <connectivity.html>`_ for more details.
 
-What's New - 1.7.0 (UPDATE DATE)
+What's New - 1.8.0 (UPDATE_DATE)
+-----------------------------------------------------------------------
+
+As of the 1.8.0 release:
+
+What's New - 1.7.1 (May 5, 2020)
+-----------------------------------------------------------------------
+
+As of the 1.7.1 release:
+
+- Added a bug fix to correct nightly tests of AllenSDK and prevent failure
+- Added a bug fix to move nightly notebook tests to using production endpoint
+
+What's New - 1.7.0 (April 29, 2020)
 -----------------------------------------------------------------------
 
 As of the 1.7.0 release:
@@ -99,6 +112,7 @@ As of the 1.7.0 release:
 - Added a new mixin for managing processing parameters for Session objects
 - Update the monitor delay calculation to better handle edge cases; no longer provide a default delay value if encounter an error
 - Added support for additional sync file line labels
+- Fixed bug with loading line labels from sync files
 
 What's New - 1.6.0 (March 23, 2020)
 -----------------------------------------------------------------------
