@@ -1,6 +1,74 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] = 2020-06-11
+
+### Added
+- CCF locations for ecephys neuropixels electrodes have been added to their respective nwb electrodes tables
+- Examples for accessing eye tracking ellipse fit and screen gaze location data have been added to ecephys example notebooks
+
+### Changed
+- pynwb and hdmf version pinning has been relaxed
+- The organization of data for ecephys neuropixels Neurodata Without Borders (NWB) files has been significantly changed to conform with NWB specifications and best practices
+
+**Important Note**:
+Due to newer versions of pynwb/hdmf having issues reading previously released Visual Coding Neuropixels NWB files and due to the significant reorganization of their NWB file contents, this release contains breaking changes that necessitate a major version revision. NWB files released prior to 6/11/2020 are not guaranteed to work with the 2.0.0 version of AllenSDK. If you cannot or choose not to re-download the updated NWB files, you can continue using a prior version of AllenSDK (< 2.0.0) to access them. However, no further features or bugfixes for AllenSDK (< 2.0.0) are planned. Data released for other projects (Cell Types, Mouse Connectivity, etc.) are *NOT* affected and will *NOT* need to be re-downloaded
+
+## [1.8.0] = 2020-06-06
+
+### Added
+- The biophysical module can now run both current and legacy all-active models.
+- Internal users can now access `date_of_acquisition` for behavior-only Session data.
+- A pull request template was added to the repository.
+
+### Changed
+- The CSV log was removed from `BehaviorProjectCache` (internal users).
+- Duplicated demixer module was deprecated, and test coverage was added.
+- Docker image for AllenSDK was updated.
+
+### Bug Fixes
+- Internal LIMS data served to `BehaviorDataSession` class now all use the same timestamp source
+
+## [1.7.1] = 2020-05-5
+
+### Bug Fixes
+- Time sync tests were failing because of removed content. Tests were running only on nightly.
+- Notebook tests failing on nightly because of down server, switched tests to production server.
+
+## [1.7.0] = 2020-04-29
+
+### Added
+- Internal users can now access `eye_tracking` ellipse fit data from behavior + ophys Session objects
+- A new mixin for managing processing parameters for Session objects
+- Added support for additional sync file line labels
+
+### Changed
+- Monitor delay calculation is updated to properly handle photodiode streams that end
+on a rising edge. We are no longer providing a default delay value in case of error.
+
+### Bug Fixes
+- experiment\_table from behavior project cache has NaNs in the 'imaging\_depth' column for MultiScope experiments due to incorrect join in behavior\_project\_lims\_api.py and 4 other places where ophys\_sessions was incorrectly queried for imaging\_depth\_id
+- get_keys method for sync datasets was returning the wrong line labels and creating incorrect key, value pairs for
+data loading from sync files
+
+## [1.6.0] = 2020-03-23
+
+### Added
+- tutorial for optotagging for ecephys notebook
+- get\_receptive\_field() method in ecephys receptive field mapping
+
+### Changed
+- remove redundant sham\_change column in behavior sessions.trials table
+- versions for NWB output for ecephys and ophys behavior.
+- monitor delay is now calculated for BehaviorOphysLimsApi rather than defaulting to 0.0351
+
+### Bug Fixes
+- Fixed a bug where auto-rewarded trials were not properly attributed in the rewards property of a visual behavior
+- return None rather than raise exception if no container id was returned from lims id for given ophys id
+- Project caches no longer accept arbitrary keywords
+- matplotloib.pyplot.hist parameter normed no longer supported
+
+
 ## [1.5.0] = 2020-02-10
 
 ### Added

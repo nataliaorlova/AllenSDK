@@ -1,10 +1,8 @@
 import numpy as np
-import os.path
-import csv
 from functools import partial
-from typing import Type, Callable, Optional, List, Any, Dict
+from typing import Type, Optional, List, Union
+from pathlib import Path
 import pandas as pd
-import time
 import logging
 
 from allensdk.api.cache import Cache
@@ -14,23 +12,17 @@ from allensdk.brain_observatory.behavior.behavior_project_lims_api import (
 from allensdk.brain_observatory.behavior.internal.behavior_project_base\
     import BehaviorProjectBase
 from allensdk.api.caching_utilities import one_file_call_caching, call_caching
-from allensdk.core.exceptions import MissingDataError
-from allensdk.core.auth_config import LIMS_DB_CREDENTIAL_MAP
-from allensdk.core.authentication import credential_injector, DbCredentials
+from allensdk.core.authentication import DbCredentials
 
 BehaviorProjectApi = Type[BehaviorProjectBase]
 
 
 class BehaviorProjectCache(Cache):
 
-    MANIFEST_VERSION = "0.0.1-alpha"
+    MANIFEST_VERSION = "0.0.1-alpha.2"
     OPHYS_SESSIONS_KEY = "ophys_sessions"
     BEHAVIOR_SESSIONS_KEY = "behavior_sessions"
     OPHYS_EXPERIMENTS_KEY = "ophys_experiments"
-
-    # Temporary way for scientists to keep track of analyses
-    OPHYS_ANALYSIS_LOG_KEY = "ophys_analysis_log"
-    BEHAVIOR_ANALYSIS_LOG_KEY = "behavior_analysis_log"
 
     MANIFEST_CONFIG = {
         OPHYS_SESSIONS_KEY: {
@@ -47,27 +39,23 @@ class BehaviorProjectCache(Cache):
             "spec": f"{OPHYS_EXPERIMENTS_KEY}.csv",
             "parent_key": "BASEDIR",
             "typename": "file"
-        },
-        OPHYS_ANALYSIS_LOG_KEY: {
-            "spec": f"{OPHYS_ANALYSIS_LOG_KEY}.csv",
-            "parent_key": "BASEDIR",
-            "typename": "file"
-            },
-        BEHAVIOR_ANALYSIS_LOG_KEY: {
-            "spec": f"{BEHAVIOR_ANALYSIS_LOG_KEY}.csv",
-            "parent_key": "BASEDIR",
-            "typename": "file"
-            },
         }
+    }
 
     def __init__(
             self,
             fetch_api: Optional[BehaviorProjectApi] = None,
             fetch_tries: int = 2,
-            **kwargs):
+            manifest: Optional[Union[str, Path]] = None,
+            version: Optional[str] = None,
+            cache: bool = True):
         """ Entrypoint for accessing visual behavior data. Supports
         access to summaries of session data and provides tools for
         downloading detailed session data (such as dff traces).
+
+        Likely you will want to use a class constructor, such as `from_lims`,
+        to initialize a BehaviorProjectCache, rather than calling this
+        directly.
 
         --- NOTE ---
         Because NWB files are not currently supported for this project (as of
@@ -87,38 +75,88 @@ class BehaviorProjectCache(Cache):
             Used to pull data from remote sources, after which it is locally
             cached. Any object inheriting from BehaviorProjectBase is
             suitable. Current options are:
-                EcephysProjectLimsApi :: Fetches bleeding-edge data from the
+                BehaviorProjectLimsApi :: Fetches bleeding-edge data from the
                     Allen Institute"s internal database. Only works if you are
                     on our internal network.
         fetch_tries :
             Maximum number of times to attempt a download before giving up and
-            raising an exception. Note that this is total tries, not retries
-        **kwargs :
-            manifest : str or Path
-                full path at which manifest json will be stored
-            version : str
-                version of manifest file. If this mismatches the version
-                recorded in the file at manifest, an error will be raised.
-            other kwargs are passed to allensdk.api.cache.Cache
+            raising an exception. Note that this is total tries, not retries.
+            Default=2.
+        manifest : str or Path
+            full path at which manifest json will be stored. Defaults
+            to "behavior_project_manifest.json" in the local directory.
+        version : str
+            version of manifest file. If this mismatches the version
+            recorded in the file at manifest, an error will be raised.
+            Defaults to the manifest version in the class.
+        cache : bool
+            Whether to write to the cache. Default=True.
         """
-        kwargs["manifest"] = kwargs.get("manifest",
-                                        "behavior_project_manifest.json")
-        kwargs["version"] = kwargs.get("version", self.MANIFEST_VERSION)
+        manifest_ = manifest or "behavior_project_manifest.json"
+        version_ = version or self.MANIFEST_VERSION
 
-        super().__init__(**kwargs)
-        self.fetch_api = fetch_api or BehaviorProjectLimsApi.default()
+        super().__init__(manifest=manifest_, version=version_, cache=cache)
+        self.fetch_api = fetch_api
         self.fetch_tries = fetch_tries
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @classmethod
-    def from_lims(cls, lims_credentials: Optional[DbCredentials] = None,
+    def from_lims(cls, manifest: Optional[Union[str, Path]] = None,
+                  version: Optional[str] = None,
+                  cache: bool = True,
+                  fetch_tries: int = 2,
+                  lims_credentials: Optional[DbCredentials] = None,
                   mtrain_credentials: Optional[DbCredentials] = None,
-                  app_kwargs: Dict[str, Any] = None, **kwargs):
-        return cls(fetch_api=BehaviorProjectLimsApi.default(
+                  host: Optional[str] = None,
+                  scheme: Optional[str] = None,
+                  asynchronous: bool = True) -> "BehaviorProjectCache":
+        """
+        Construct a BehaviorProjectCache with a lims api. Use this method
+        to create a  BehaviorProjectCache instance rather than calling
+        BehaviorProjectCache directly.
+
+        Parameters
+        ==========
+        manifest : str or Path
+            full path at which manifest json will be stored
+        version : str
+            version of manifest file. If this mismatches the version
+            recorded in the file at manifest, an error will be raised.
+        cache : bool
+            Whether to write to the cache
+        fetch_tries : int
+            Maximum number of times to attempt a download before giving up and
+            raising an exception. Note that this is total tries, not retries
+        lims_credentials : DbCredentials
+            Optional credentials to access LIMS database.
+            If not set, will look for credentials in environment variables.
+        mtrain_credentials: DbCredentials
+            Optional credentials to access mtrain database.
+            If not set, will look for credentials in environment variables.
+        host : str
+            Web host for the app_engine. Currently unused. This argument is
+            included for consistency with EcephysProjectCache.from_lims.
+        scheme : str
+            URI scheme, such as "http". Currently unused. This argument is
+            included for consistency with EcephysProjectCache.from_lims.
+        asynchronous : bool
+            Whether to fetch from web asynchronously. Currently unused.
+        Returns
+        =======
+        BehaviorProjectCache
+            BehaviorProjectCache instance with a LIMS fetch API
+        """
+        if host and scheme:
+            app_kwargs = {"host": host, "scheme": scheme,
+                          "asynchronous": asynchronous}
+        else:
+            app_kwargs = None
+        fetch_api = BehaviorProjectLimsApi.default(
                         lims_credentials=lims_credentials,
                         mtrain_credentials=mtrain_credentials,
-                        app_kwargs=app_kwargs),
-                   **kwargs)
+                        app_kwargs=app_kwargs)
+        return cls(fetch_api=fetch_api, manifest=manifest, version=version,
+                   cache=cache, fetch_tries=fetch_tries)
 
     def get_session_table(
             self,
@@ -227,121 +265,43 @@ class BehaviorProjectCache(Cache):
 
     def get_session_data(self, ophys_experiment_id: int, fixed: bool = False):
         """
-        Note -- This method mocks the behavior of a cache. No files are
-        actually downloaded for local access. Instead, it adds the
-        session id to a csv log. If the "fixed" parameter is true,
-        then the API will first check to ensure that the log is present
-        in the record before pulling the data.
+        Note -- This method mocks the behavior of a cache. Future
+        development will include an NWB reader to read from
+        a true local cache (once nwb files are created).
+        TODO: Using `fixed` will raise a NotImplementedError since there
+        is no real cache.
         """
-        # TODO: Future development will include an NWB reader to read from
-        # a true local cache (once nwb files are created)
-        # For now just check the log if pass `fixed`
-        path = self.get_cache_path(None, self.OPHYS_ANALYSIS_LOG_KEY)
         if fixed:
-            self.logger.warning(
-                "Warning! Passing `fixed=True` does not ensure that the "
-                "underlying data has not changed, as no data are actually "
-                "cached locally. The log will be updated each time the data "
-                "are pulled from the database for tracking purposes.")
-            try:
-                record = pd.read_csv(path)
-            except FileNotFoundError:
-                raise MissingDataError(
-                    "No analysis log found! Add to the log by getting "
-                    "session data with fixed=False.")
-            if ophys_experiment_id not in record["ophys_experiment_id"].values:
-                raise MissingDataError(
-                    f"Data for ophys experiment {ophys_experiment_id} not "
-                    "found!")
-
+            raise NotImplementedError
         fetch_session = partial(self.fetch_api.get_session_data,
                                 ophys_experiment_id)
-        write_log = partial(_write_log, path=path,
-                            key_name="ophys_experiment_id",
-                            key_value=ophys_experiment_id)
         return call_caching(
             fetch_session,
-            write_log,
-            lazy=False,
+            lambda x: x,        # not writing anything
+            lazy=False,         # can't actually read from file cache
             read=fetch_session
         )
 
     def get_behavior_session_data(self, behavior_session_id: int,
                                   fixed: bool = False):
         """
-        Note -- This method mocks the behavior of a cache. No files are
-        actually downloaded for local access. Instead, it adds the
-        session id to a csv log. If the "fixed" parameter is true,
-        then the API will first check to ensure that the log is present
-        in the record before pulling the data.
+        Note -- This method mocks the behavior of a cache. Future
+        development will include an NWB reader to read from
+        a true local cache (once nwb files are created).
+        TODO: Using `fixed` will raise a NotImplementedError since there
+        is no real cache.
         """
-        # TODO: Future development will include an NWB reader to read from
-        # a true local cache (once nwb files are created)
-        # For now just check the log if pass `fixed`
-        path = self.get_cache_path(None, self.BEHAVIOR_ANALYSIS_LOG_KEY)
         if fixed:
-            self.logger.warning(
-                "Warning! Passing `fixed=True` does not ensure that the "
-                "underlying data has not changed, as no data are actually "
-                "cached locally. The log will be updated each time the data "
-                "are pulled from the database for tracking purposes.")
-            try:
-                record = pd.read_csv(path)
-            except FileNotFoundError:
-                raise MissingDataError(
-                    "No analysis log found! Add to the log by getting "
-                    "session data with fixed=False.")
-            if behavior_session_id not in record["behavior_session_id"].values:
-                raise MissingDataError(
-                    f"Data for ophys experiment {behavior_session_id} not "
-                    "found!")
+            raise NotImplementedError
 
         fetch_session = partial(self.fetch_api.get_behavior_only_session_data,
                                 behavior_session_id)
-        write_log = partial(_write_log, path=path,
-                            key_name="behavior_session_id",
-                            key_value=behavior_session_id)
         return call_caching(
             fetch_session,
-            write_log,
+            lambda x: x,       # not writing anything
             lazy=False,        # can't actually read from file cache
             read=fetch_session
         )
-
-
-def _write_log(data: Any, path: str, key_name: str, key_value: Any):
-    """
-    Helper method to create and add to a log. Invoked any time a session
-    object is created via BehaviorProjectCache.
-    :param data: Unused, required because call_caching method assumes
-    all writer functions have data as the first positional argument
-    :param path: Path to save the log file
-    :type path: str path
-    :param key_name: Name of the id used to track the session object.
-    Typically "behavior_session_id" or "ophys_session_id".
-    :type key_name: str
-    :param key_value: Value of the id used to track the session object.
-    Usually an int.
-    """
-    now = round(time.time())
-    keys = [key_name, "created_at", "updated_at"]
-    values = [key_value, now, now]
-    if os.path.exists(path):
-        record = (pd.read_csv(path, index_col=key_name)
-                    .to_dict(orient="index"))
-        experiment = record.get(key_value)
-        if experiment:
-            experiment.update({"updated_at": now})
-        else:
-            record.update({key_value: dict(zip(keys[1:], values[1:]))})
-        (pd.DataFrame.from_dict(record, orient="index")
-            .rename_axis(index=key_name)
-            .to_csv(path))
-    else:
-        with open(path, "w") as f:
-            w = csv.DictWriter(f, fieldnames=keys)
-            w.writeheader()
-            w.writerow(dict(zip(keys, values)))
 
 
 def _write_csv(path, df, array_fields=None):
