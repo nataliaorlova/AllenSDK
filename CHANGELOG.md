@@ -1,5 +1,15 @@
 # Change Log
 All notable changes to this project will be documented in this file.
+## [2.2.0]
+## Bug Fixes
+- `response_time` of a trial in behavior-only or behavior + ophys sessions is now the first lick of the trial (for non-"aborted" trials). If no lick occurred or if the trial is "aborted", `repsonse_time` is `NaN`.
+
+## [2.1.0] = 2020-07-16
+
+### Added
+- Behvaior Ophys NWB File writing capability fixes for updated PyNWB and HDMF versions
+- Added warning if using outdated Visual Coding Neuropixels NWB files
+- Added documentation file for Visual Behavior terms in AllenSDK for quick lookup
 
 ## [2.0.0] = 2020-06-11
 
