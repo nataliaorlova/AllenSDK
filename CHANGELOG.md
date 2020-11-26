@@ -1,8 +1,83 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
-## [1.8.0] = [UPDATE_DATE]
+## [2.3.3] = 2020-11-12
+### Bug Fixes
+- (Internal) Fixed a bug in mesoscope processing where the ophys acquisition frames were being truncated
+prior to splitting, resulting in many fewer than expected acquisition frames.
 
+## [2.3.2] = 2020-10-19
+
+### Bug Fixes
+- (Internal) Fixed a running\_processing bug for behavior ophys experiments when the input data would have one more encoder entry than timestamp. The behavior of the code now matches what the warning says.
+
+## [2.3.1] = 2020-10-13
+
+### Bug Fixes
+- (Internal) Fixed a write\_nwb bug for behavior ophys experiments involving the BehaviorOphysJsonApi expecting a mesoscope-specific method.
+
+## [2.3.0] = 2020-10-09
+
+### Added
+- Adds load sync data for individual plane sets to relate accurate event timings to mesoscope data.
+- Adds public API method to access the behavior\_session\_id from an instance of BehaviorOphysSession.
+
+### Changes
+- Visual behavior running speed is now low-pass filtered at 10Hz. The raw running speed data is still available. The running speed is corrected for encoder threshold croissing artifacts.
+- Support for stimulus gratings for visual behavior.
+- Updates to some visual behavior pynwb implementations.
+
+### Bug Fixes
+- Fixed an eye-tracking sync problem.
+
+## [2.2.0] = 2020-09-03
+
+### Added
+- AllenSDK HTTP engine streaming requests now include a progress bar.
+
+### Changed
+- (Internal) Behavior Ophys Sessions no longer have a dependence on the `segmentation_mask_image` file (provided by LIMS) when trying to write NWB files.
+
+### Bug Fixes
+- (Internal) `response_time` of a trial in behavior-only or behavior + ophys sessions is now the first lick of the trial (for non-"aborted" trials). If no lick occurred or if the trial is "aborted", `response_time` is `NaN`.
+- Resolve `ImportError: cannot import name 'MultiContainerInterface' from 'hdmf.container'` errors by removing explicit version bounds on the `hdmf` package.
+- The optical physiology 2-photon trace demixer has been modified to be more memory friendly and should no longer result in out of memory errors when trying to demix very large movie stacks.
+- (Internal) Docker image definitions have been updated so that internal continuous integration tests can work properly
+
+## [2.1.0] = 2020-07-16
+
+### Added
+- Behavior Ophys NWB File writing capability fixes for updated PyNWB and HDMF versions
+- Added warning if using outdated Visual Coding Neuropixels NWB files
+- Added documentation file for Visual Behavior terms in AllenSDK for quick lookup
+
+## [2.0.0] = 2020-06-11
+
+### Added
+- CCF locations for ecephys neuropixels electrodes have been added to their respective nwb electrodes tables
+- Examples for accessing eye tracking ellipse fit and screen gaze location data have been added to ecephys example notebooks
+
+### Changed
+- pynwb and hdmf version pinning has been relaxed
+- The organization of data for ecephys neuropixels Neurodata Without Borders (NWB) files has been significantly changed to conform with NWB specifications and best practices
+
+**Important Note**:
+Due to newer versions of pynwb/hdmf having issues reading previously released Visual Coding Neuropixels NWB files and due to the significant reorganization of their NWB file contents, this release contains breaking changes that necessitate a major version revision. NWB files released prior to 6/11/2020 are not guaranteed to work with the 2.0.0 version of AllenSDK. If you cannot or choose not to re-download the updated NWB files, you can continue using a prior version of AllenSDK (< 2.0.0) to access them. However, no further features or bugfixes for AllenSDK (< 2.0.0) are planned. Data released for other projects (Cell Types, Mouse Connectivity, etc.) are *NOT* affected and will *NOT* need to be re-downloaded
+
+## [1.8.0] = 2020-06-06
+
+### Added
+- The biophysical module can now run both current and legacy all-active models.
+- Internal users can now access `date_of_acquisition` for behavior-only Session data.
+- A pull request template was added to the repository.
+
+### Changed
+- The CSV log was removed from `BehaviorProjectCache` (internal users).
+- Duplicated demixer module was deprecated, and test coverage was added.
+- Docker image for AllenSDK was updated.
+
+### Bug Fixes
+- Internal LIMS data served to `BehaviorDataSession` class now all use the same timestamp source
 
 ## [1.7.1] = 2020-05-5
 

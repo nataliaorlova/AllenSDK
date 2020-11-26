@@ -1,8 +1,0 @@
-namespaces:
-- doc: "LabMetaData extensions: ['OphysBehaviorMetaData', 'OphysBehaviorTaskParameters']\
-    \ (AIBS_ophys_behavior)"
-  name: AIBS_ophys_behavior
-  version: 0.1.0
-  schema:
-  - namespace: core
-  - source: AIBS_ophys_behavior_extension.yaml

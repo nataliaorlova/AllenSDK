@@ -1,10 +1,22 @@
 import pytest
 import pandas as pd
+import numpy as np
+from contextlib import contextmanager
 
 from allensdk.internal.api import OneResultExpectedError
 from allensdk.internal.api.behavior_ophys_api import BehaviorOphysLimsApi
 from allensdk.brain_observatory.behavior.mtrain import ExtendedTrialSchema
 from marshmallow.schema import ValidationError
+
+
+@contextmanager
+def does_not_raise(enter_result=None):
+    """
+    Context to help parametrize tests that may raise errors.
+    If we start supporting only python 3.7+, switch to
+    contextlib.nullcontext
+    """
+    yield enter_result
 
 
 @pytest.mark.requires_bamboo
@@ -55,3 +67,58 @@ def test_get_nwb_filepath(ophys_experiment_id):
 
     api = BehaviorOphysLimsApi(ophys_experiment_id)
     assert api.get_nwb_filepath() == '/allen/programs/braintv/production/visualbehavior/prod0/specimen_823826986/ophys_session_859701393/ophys_experiment_860030092/behavior_ophys_session_860030092.nwb'
+
+
+@pytest.mark.parametrize(
+    "timestamps,plane_group,group_count,expected",
+    [
+        (np.ones(10), 1, 0, np.ones(10)),
+        (np.ones(10), 1, 0, np.ones(10)),
+        # middle
+        (np.array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]), 1, 3, np.ones(4)),
+        # first
+        (np.array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]), 0, 4, np.ones(3)),
+        # last
+        (np.array([0, 1, 0, 1, 0, 1, 0, 1]), 1, 2, np.ones(4)),
+        # only one group
+        (np.ones(10), 0, 1, np.ones(10))
+    ]
+)
+def test_process_ophys_plane_timestamps(
+        timestamps, plane_group, group_count, expected):
+    actual = BehaviorOphysLimsApi._process_ophys_plane_timestamps(
+        timestamps, plane_group, group_count)
+    np.testing.assert_array_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "plane_group, ophys_timestamps, dff_traces, expected, context",
+    [
+        (None, np.arange(10), np.arange(5).reshape(1, 5),
+         np.arange(5), does_not_raise()),
+        (None, np.arange(10), np.arange(20).reshape(1, 20),
+         None, pytest.raises(RuntimeError)),
+        (0, np.arange(10), np.arange(5).reshape(1, 5),
+         np.arange(0, 10, 2), does_not_raise()),
+        (0, np.arange(20), np.arange(5).reshape(1, 5),
+         None, pytest.raises(RuntimeError))
+    ],
+    ids=["scientifica-trunate", "scientifica-raise", "mesoscope-good",
+         "mesoscope-raise"]
+)
+def test_get_ophys_timestamps(monkeypatch, plane_group, ophys_timestamps,
+                              dff_traces, expected, context):
+    """Test the acquisition frame truncation only happens for
+    non-mesoscope data (and raises error for scientifica data with
+    longer trace frames than acquisition frames (ophys_timestamps))."""
+    api = BehaviorOphysLimsApi(123)
+    # Mocking any db calls
+    monkeypatch.setattr(api, "get_sync_data",
+                        lambda: {"ophys_frames": ophys_timestamps})
+    monkeypatch.setattr(api, "get_raw_dff_data", lambda: dff_traces)
+    monkeypatch.setattr(api, "get_imaging_plane_group", lambda: plane_group)
+    monkeypatch.setattr(api, "get_plane_group_count", lambda: 2)
+    with context:
+        actual = api.get_ophys_timestamps()
+        if expected is not None:
+            np.testing.assert_array_equal(expected, actual)

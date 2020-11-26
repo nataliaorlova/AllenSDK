@@ -98,7 +98,8 @@ def test_visbeh_ophys_data_set():
                                  'indicator': 'GCAMP6f',
                                  'rig_name': 'CAM2P.5',
                                  'age': 'P139',
-                                 'sex': 'F'}
+                                 'sex': 'F',
+                                 'imaging_plane_group': None}
 
     assert math.isnan(data_set.task_parameters.pop('omitted_flash_fraction'))
     assert data_set.task_parameters == {'reward_volume': 0.007,
@@ -196,11 +197,10 @@ def cell_specimen_table_api():
                 }, index=pd.Index(data=[10, 11], name="cell_specimen_id")
             )
 
-        def get_segmentation_mask_image(self):
-            data = roi_1  # useless image data here
-            spacing = (1, 1)
-            unit = 'index'
-            return ImageApi.serialize(data, spacing, unit)
+        def get_max_projection(self):
+            return ImageApi.serialize(roi_1 + roi_2,
+                                      [0.5, 1.], 'mm')
+
     return CellSpecimenTableApi()
 
 
@@ -239,6 +239,10 @@ def test_get_roi_masks_by_cell_roi_id(roi_ids, expected, cell_specimen_table_api
     ssn = BehaviorOphysSession(api=cell_specimen_table_api)
     obtained = ssn._get_roi_masks_by_cell_roi_id(roi_ids)
     assert np.allclose(expected, obtained.values)
+    assert np.allclose(obtained.coords['row'],
+                       [0.5, 1.5, 2.5, 3.5, 4.5])
+    assert np.allclose(obtained.coords['column'],
+                       [0.25, 0.75, 1.25, 1.75, 2.25])
 
 
 @pytest.mark.parametrize("cell_specimen_ids,expected", [

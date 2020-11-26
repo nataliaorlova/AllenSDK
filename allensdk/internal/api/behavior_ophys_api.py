@@ -36,6 +36,7 @@ class BehaviorOphysLimsApi(OphysLimsApi, BehaviorOphysApiBase):
     def __init__(self, ophys_experiment_id: int,
                  lims_credentials: Optional[DbCredentials] = None):
         super().__init__(ophys_experiment_id, lims_credentials)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     @memoize
     def get_sync_data(self):
@@ -49,20 +50,80 @@ class BehaviorOphysLimsApi(OphysLimsApi, BehaviorOphysApiBase):
                             .corrected_stim_timestamps)
         return timestamps
 
+    @staticmethod
+    def _process_ophys_plane_timestamps(
+            ophys_timestamps: np.ndarray, plane_group: Optional[int],
+            group_count: int):
+        """
+        On mesoscope rigs each frame corresponds to a different imaging plane;
+        the laser moves between N pairs of planes. So, every Nth 2P
+        frame time in the sync file corresponds to a given plane (and
+        its multiplexed pair). The order in which the planes are
+        acquired dictates which timestamps should be assigned to which
+        plane pairs. The planes are acquired in ascending order, where
+        plane_group=0 is the first group of planes.
+
+        If the plane group is None (indicating it does not belong to
+        a plane group), then the plane was not collected concurrently
+        and the data do not need to be resampled. This is the case for
+        Scientifica 2p data, for example.
+
+        Parameters
+        ----------
+        ophys_timestamps: np.ndarray
+            Array of timestamps for 2p data
+        plane_group: int
+            The plane group this experiment belongs to. Signals the
+            order of acquisition.
+        group_count: int
+            The total number of plane groups acquired.
+        """
+        if (group_count == 0) or (plane_group is None):
+            return ophys_timestamps
+        resampled = ophys_timestamps[plane_group::group_count]
+        return resampled
+
     @memoize
     def get_ophys_timestamps(self):
 
         ophys_timestamps = self.get_sync_data()['ophys_frames']
         dff_traces = self.get_raw_dff_data()
-        number_of_cells, number_of_dff_frames = dff_traces.shape
-        num_of_timestamps = len(ophys_timestamps)
-        if number_of_dff_frames < num_of_timestamps:
-            ophys_timestamps = ophys_timestamps[:number_of_dff_frames]
-        elif number_of_dff_frames == num_of_timestamps:
-            pass
-        else:
-            raise RuntimeError('dff_frames is longer than timestamps')
+        plane_group = self.get_imaging_plane_group()
 
+        number_of_cells, number_of_dff_frames = dff_traces.shape
+        # Scientifica data has extra frames in the sync file relative
+        # to the number of frames in the video. These sentinel frames
+        # should be removed.
+        # NOTE: This fix does not apply to mesoscope data.
+        # See http://confluence.corp.alleninstitute.org/x/9DVnAg
+        if plane_group is None:    # non-mesoscope
+            num_of_timestamps = len(ophys_timestamps)
+            if (number_of_dff_frames < num_of_timestamps):
+                self.logger.info(
+                    "Truncating acquisition frames ('ophys_frames') "
+                    f"(len={num_of_timestamps}) to the number of frames "
+                    f"in the df/f trace ({number_of_dff_frames}).")
+                ophys_timestamps = ophys_timestamps[:number_of_dff_frames]
+            elif number_of_dff_frames > num_of_timestamps:
+                raise RuntimeError(
+                    f"dff_frames (len={number_of_dff_frames}) is longer "
+                    f"than timestamps (len={num_of_timestamps}).")
+        # Mesoscope data
+        # Resample if collecting multiple concurrent planes (e.g. mesoscope)
+        # because the frames are interleaved
+        else:
+            group_count = self.get_plane_group_count()
+            self.logger.info(
+                "Mesoscope data detected. Splitting timestamps "
+                f"(len={len(ophys_timestamps)} over {group_count} "
+                "plane group(s).")
+            ophys_timestamps = self._process_ophys_plane_timestamps(
+                ophys_timestamps, plane_group, group_count)
+            num_of_timestamps = len(ophys_timestamps)
+            if number_of_dff_frames != num_of_timestamps:
+                raise RuntimeError(
+                    f"dff_frames (len={number_of_dff_frames}) is not equal to "
+                    f"number of split timestamps (len={num_of_timestamps}).")
         return ophys_timestamps
 
     @memoize
@@ -118,6 +179,7 @@ class BehaviorOphysLimsApi(OphysLimsApi, BehaviorOphysApiBase):
         metadata['LabTracks_ID'] = self.get_external_specimen_name()
         metadata['full_genotype'] = self.get_full_genotype()
         metadata['behavior_session_uuid'] = uuid.UUID(self.get_behavior_session_uuid())
+        metadata["imaging_plane_group"] = self.get_imaging_plane_group()
 
         return metadata
 
@@ -132,15 +194,15 @@ class BehaviorOphysLimsApi(OphysLimsApi, BehaviorOphysApiBase):
         return df
 
     @memoize
-    def get_running_data_df(self):
+    def get_running_data_df(self, lowpass=True):
         stimulus_timestamps = self.get_stimulus_timestamps()
         behavior_stimulus_file = self.get_behavior_stimulus_file()
         data = pd.read_pickle(behavior_stimulus_file)
-        return get_running_df(data, stimulus_timestamps)
+        return get_running_df(data, stimulus_timestamps, lowpass=lowpass)
 
     @memoize
-    def get_running_speed(self):
-        running_data_df = self.get_running_data_df()
+    def get_running_speed(self, lowpass=True):
+        running_data_df = self.get_running_data_df(lowpass=lowpass)
         assert running_data_df.index.name == 'timestamps'
         return RunningSpeed(timestamps=running_data_df.index.values,
                             values=running_data_df.speed.values)
@@ -155,7 +217,8 @@ class BehaviorOphysLimsApi(OphysLimsApi, BehaviorOphysApiBase):
         idx_name = stimulus_presentations_df_pre.index.name
         stimulus_index_df = stimulus_presentations_df_pre.reset_index().merge(stimulus_metadata_df.reset_index(), on=['image_name']).set_index(idx_name)
         stimulus_index_df.sort_index(inplace=True)
-        stimulus_index_df = stimulus_index_df[['image_set', 'image_index', 'start_time']].rename(columns={'start_time': 'timestamps'})
+        stimulus_index_df = stimulus_index_df[['image_set', 'image_index', 'start_time',
+                                               'phase', 'spatial_frequency']].rename(columns={'start_time': 'timestamps'})
         stimulus_index_df.set_index('timestamps', inplace=True, drop=True)
         stimulus_presentations_df = stimulus_presentations_df_pre.merge(stimulus_index_df, left_on='start_time', right_index=True, how='left')
         assert len(stimulus_presentations_df_pre) == len(stimulus_presentations_df)
@@ -299,7 +362,8 @@ class BehaviorOphysLimsApi(OphysLimsApi, BehaviorOphysApiBase):
         eye_tracking_data = load_eye_tracking_hdf(filepath)
         frame_times = sync_utilities.get_synchronized_frame_times(
             session_sync_file=sync_path,
-            sync_line_label_keys=Dataset.EYE_TRACKING_KEYS)
+            sync_line_label_keys=Dataset.EYE_TRACKING_KEYS,
+            trim_after_spike=False)
 
         eye_tracking_data = process_eye_tracking_data(eye_tracking_data,
                                                       frame_times,

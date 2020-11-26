@@ -6,20 +6,28 @@ import pytz
 import math
 
 from allensdk.internal.api.behavior_data_lims_api import BehaviorDataLimsApi
+from allensdk.core.authentication import DbCredentials
 from allensdk.internal.api.behavior_ophys_api import BehaviorOphysLimsApi
 from allensdk.brain_observatory.running_speed import RunningSpeed
 from allensdk.core.exceptions import DataFrameIndexError
 
+mock_db_credentials = DbCredentials(dbname='mock_db', user='mock_user',
+                                      host='mock_host', port='mock_port',
+                                      password='mock')
+
 
 @pytest.fixture
 def MockBehaviorDataLimsApi():
+
     class MockBehaviorDataLimsApi(BehaviorDataLimsApi):
         """
         Mock class that overrides some functions to provide test data and
         initialize without calls to db.
         """
         def __init__(self):
-            super().__init__(behavior_session_id=8675309)
+            super().__init__(behavior_session_id=8675309,
+                             lims_credentials=mock_db_credentials,
+                             mtrain_credentials=mock_db_credentials)
 
         def _get_ids(self):
             return {}
@@ -55,7 +63,7 @@ def MockBehaviorDataLimsApi():
             }
             return data
 
-        def get_running_data_df(self):
+        def get_running_data_df(self, lowpass=True):
             return pd.DataFrame(
                 {"timestamps": [0.0, 0.1, 0.2],
                  "speed": [8.0, 15.0, 16.0]}).set_index("timestamps")
@@ -73,12 +81,14 @@ def MockApiRunSpeedExpectedError():
         initialize without calls to db.
         """
         def __init__(self):
-            super().__init__(behavior_session_id=8675309)
+            super().__init__(behavior_session_id=8675309,
+                             mtrain_credentials=mock_db_credentials,
+                             lims_credentials=mock_db_credentials)
 
         def _get_ids(self):
             return {}
 
-        def get_running_data_df(self):
+        def get_running_data_df(self, lowpass=True):
             return pd.DataFrame(
                 {"timestamps": [0.0, 0.1, 0.2],
                  "speed": [8.0, 15.0, 16.0]})
@@ -197,16 +207,16 @@ class TestBehaviorRegression:
     def test_get_running_speed_regression(self):
         """Can't test values because they're intrinsically linked to timestamps
         """
-        bd_speed = self.bd.get_running_speed()
-        od_speed = self.od.get_running_speed()
+        bd_speed = self.bd.get_running_speed(lowpass=False)
+        od_speed = self.od.get_running_speed(lowpass=False)
         assert len(bd_speed.values) == len(od_speed.values)
         assert len(bd_speed.timestamps) == len(od_speed.timestamps)
 
     def test_get_running_df_regression(self):
         """Can't test values because they're intrinsically linked to timestamps
         """
-        bd_running = self.bd.get_running_data_df()
-        od_running = self.od.get_running_data_df()
+        bd_running = self.bd.get_running_data_df(lowpass=False)
+        od_running = self.od.get_running_data_df(lowpass=False)
         assert len(bd_running) == len(od_running)
         assert list(bd_running) == list(od_running)
 

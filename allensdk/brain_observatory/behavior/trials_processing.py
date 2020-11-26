@@ -1,15 +1,13 @@
-import numpy as np
-import datetime
-import pandas as pd
-import scipy.stats as sps
+from typing import List, Dict
 import uuid
 from copy import deepcopy
 import collections
 import dateutil
-from scipy.stats import norm
+
+import pandas as pd
+import numpy as np
 
 from allensdk import one
-
 
 # TODO: add trial column descriptions
 TRIAL_COLUMN_DESCRIPTION_DICT = {}
@@ -92,6 +90,7 @@ RIG_NAME = {
 RIG_NAME = {k.lower(): v for k, v in RIG_NAME.items()}
 COMPUTER_NAME = dict((v, k) for k, v in RIG_NAME.items())
 
+
 def resolve_initial_image(stimuli, start_frame):
     """Attempts to resolve the initial image for a given start_frame for a trial
 
@@ -122,6 +121,8 @@ def resolve_initial_image(stimuli, start_frame):
             if set_frame <= start_frame and set_frame >= max_frame:
                 initial_image_group = initial_image_name = set_event[1]  # hack assumes initial_image_group == initial_image_name, only initial_image_name is present for natual_scenes
                 initial_image_category_name = stim_category_name
+                if initial_image_category_name == 'grating':
+                    initial_image_name = f'gratings_{initial_image_name}'
                 max_frame = set_frame
 
     return initial_image_category_name, initial_image_group, initial_image_name
@@ -215,37 +216,121 @@ def get_trial_reward_time(rebased_reward_times, start_time, stop_time):
         rebased_reward_times <= stop_time
     ))]
     return float('nan') if len(reward_times) == 0 else one(reward_times)
-        
 
-def get_trial_timing(event_dict, stimulus_presentations_df, licks, go, catch, auto_rewarded, hit, false_alarm):
-    '''
-    extract trial timing data
-    
-    content of trial log depends on trial type depends on trial type and response type
-    go, catch, auto_rewarded, hit, false_alarm must be passed as booleans to disambiguate trial and response type
 
-    on `go` or `auto_rewarded` trials, extract the stimulus_changed time
-    on `catch` trials, extract the sham_change time
+def _get_response_time(licks: List[float], aborted: bool) -> float:
+    """
+    Return the time the first lick occurred in a non-"aborted" trial.
+    A response time is not returned for on an "aborted trial", since by
+    definition, the animal licked before the change stimulus.
 
-    on `hit` trials, extract the response time from the `hit` entry in event_dict
-    on `false_alarm` trials, extract the response time from the `false_alarm` entry in event_dict
-    '''
+    Parameters
+    ==========
+    licks: List[float]
+        List of timestamps that a lick occurred during this trial.
+        The list should contain all licks that occurred while the trial
+        was active (between 'trial_start' and 'trial_end' events)
+    aborted: bool
+        Whether or not the trial was "aborted". This means that the
+        response occurred before the stimulus change and should not be
+        a valid response.
+    Returns
+    =======
+    float
+        Time of first lick if there was a valid response, otherwise
+        NaN. See rules above.
+    """
+    if aborted:
+        return float("nan")
+    if len(licks):
+        return licks[0]
+    else:
+        return float("nan")
 
-    assert not (hit==True and false_alarm==True), "both `hit` and `false_alarm` cannot be True, they are mutually exclusive categories"
-    assert not (go==True and catch==True), "both `go` and `catch` cannot be True, they are mutually exclusive categories"
-    assert not (go==True and auto_rewarded==True), "both `go` and `auto_rewarded` cannot be True, they are mutually exclusive categories"
+
+def get_trial_timing(
+        event_dict: dict, stimulus_presentations_df: pd.DataFrame,
+        licks: List[float], go: bool, catch: bool, auto_rewarded: bool,
+        hit: bool, false_alarm: bool, aborted: bool):
+    """
+    Extract a dictionary of trial timing data.
+    See trial_data_from_log for a description of the trial types.
+
+    Parameters
+    ==========
+    event_dict: dict
+        Dictionary of trial events in the well-known `pkl` file
+    stimulus_presentations_df: pd.DataFrame
+        pandas dataframe of stimulus presentations, from the
+        `get_stimulus_presentations` response for the
+        BehaviorOphysSession.api.
+    licks: List[float]
+        list of lick timestamps, from the `get_licks` response for
+        the BehaviorOphysSession.api.
+    go: bool
+        True if "go" trial, False otherwise. Mutually exclusive with
+        `catch`.
+    catch: bool
+        True if "catch" trial, False otherwise. Mutually exclusive
+        with `go.`
+    auto_rewarded: bool
+        True if "auto_rewarded" trial, False otherwise.
+    hit: bool
+        True if "hit" trial, False otherwise
+    false_alarm: bool
+        True if "false_alarm" trial, False otherwise
+    aborted: bool
+        True if "aborted" trial, False otherwise
+
+    Returns
+    =======
+    dict
+        start_time: float
+            The time the trial started (in seconds elapsed from
+            recording start)
+        stop_time: float
+            The time the trial ended (in seconds elapsed from
+            recording start)
+        trial_length: float
+            Duration of the trial in seconds
+        response_time: float
+            The response time, for non-aborted trials. This is equal
+            to the first lick in the trial. For aborted trials or trials
+            without licks, `response_time` is NaN.
+        change_frame: int
+            The frame number that the stimulus changed
+        change_time: float
+            The time in seconds that the stimulus changed
+        response_latency: float or None
+            The time in seconds between the stimulus change and the
+            animal's lick response, if the trial is a "go", "catch", or
+            "auto_rewarded" type. If the animal did not respond,
+            return `float("inf")`. In all other cases, return None.
+
+    Notes
+    =====
+    The following parameters are mutually exclusive (exactly one can
+    be true):
+        hit, miss, false_alarm, aborted, auto_rewarded
+    """
+    assert not (aborted and (hit or false_alarm or auto_rewarded)), (
+        "'aborted' trials cannot be 'hit', 'false_alarm', or 'auto_rewarded'")
+    assert not (hit and false_alarm), (
+        "both `hit` and `false_alarm` cannot be True, they are mutually "
+        "exclusive categories")
+    assert not (go and catch), (
+        "both `go` and `catch` cannot be True, they are mutually exclusive "
+        "categories")
+    assert not (go and auto_rewarded), (
+        "both `go` and `auto_rewarded` cannot be True, they are mutually "
+        "exclusive categories")
 
     start_time = event_dict["trial_start", ""]['rebased_time']
     stop_time = event_dict["trial_end", ""]['rebased_time']
 
-    if hit:
-        response_time = event_dict.get(("hit", ""))['rebased_time']
-    elif false_alarm:
-        response_time = event_dict.get(("false_alarm", ""))['rebased_time']
-    else:
-        response_time = float("nan")
+    response_time = _get_response_time(licks, aborted)
 
-    def get_change_time(change_frame,stimulus_presentations_df):
+    def get_change_time(change_frame, stimulus_presentations_df):
         # get the first stimulus in the log after the current change frame:
         query = stimulus_presentations_df.query('start_frame >= @change_frame')
         if len(query) > 0:
@@ -256,10 +341,10 @@ def get_trial_timing(event_dict, stimulus_presentations_df, licks, go, catch, au
 
     if go or auto_rewarded:
         change_frame = event_dict.get(('stimulus_changed', ''))['frame']
-        change_time = get_change_time(change_frame,stimulus_presentations_df)
+        change_time = get_change_time(change_frame, stimulus_presentations_df)
     elif catch:
         change_frame = event_dict.get(('sham_change', ''))['frame']
-        change_time = get_change_time(change_frame,stimulus_presentations_df)
+        change_time = get_change_time(change_frame, stimulus_presentations_df)
     else:
         change_time = float("nan")
         change_frame = float("nan")
@@ -279,16 +364,37 @@ def get_trial_timing(event_dict, stimulus_presentations_df, licks, go, catch, au
         "change_frame": change_frame,
         "change_time": change_time,
         "response_latency": response_latency,
-    }       
+    }
 
 
-def get_trial_image_names(trial, stimuli):
+def get_trial_image_names(trial, stimuli) -> Dict[str, str]:
+    """
+    Gets the name of the stimulus presented at the beginning of the trial and
+    what is it changed to at the end of the trial.
+    Parameters
+    ----------
+    trial: A trial in a behavior ophys session
+    stimuli: The stimuli presentation log for the behavior session
+
+    Returns
+    -------
+        A dictionary indicating the starting_stimulus and what the stimulus is
+        changed to.
+
+    """
+    grating_oris = {'horizontal', 'vertical'}
     trial_start_frame = trial["events"][0][3]
-    _, _, initial_image_name = resolve_initial_image(stimuli, trial_start_frame)
+    initial_image_category_name, _, initial_image_name = resolve_initial_image(
+        stimuli, trial_start_frame)
     if len(trial["stimulus_changes"]) == 0:
         change_image_name = initial_image_name
     else:
-        (_, from_name), (_, to_name), _, _ = trial["stimulus_changes"][0]
+        (from_set, from_name), (to_set, to_name), _, _ = trial["stimulus_changes"][0]
+        # do this to fix names if the stimuli is a grating
+        if from_set in grating_oris:
+            from_name = f'gratings_{from_name}'
+        if to_set in grating_oris:
+            to_name = f'gratings_{to_name}'
         assert from_name == initial_image_name
         change_image_name = to_name
 
@@ -332,6 +438,7 @@ def get_trials(data, licks_df, rewards_df, stimulus_presentations_df, rebase):
             tr_data['auto_rewarded'],
             tr_data['hit'],
             tr_data['false_alarm'],
+            tr_data["aborted"]
         ))
         tr_data.update(get_trial_image_names(trial, stimuli))
 
